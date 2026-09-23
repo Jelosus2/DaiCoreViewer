@@ -1,0 +1,3 @@
+[submodule "tools"]
+	path = tools
+	url = https://github.com/Jelosus2/DaiCoreViewer-tools.git
