@@ -10,11 +10,9 @@ const host = useTemplateRef<HTMLDivElement>("host");
 const loading = ref(true);
 const errorMessage = ref("");
 
-const assetUrls = [...new Set(
-    props.root.nodes.flatMap((node) =>
-        node.spines.flatMap((spine) => [spine.json, spine.atlas])
-    )
-)];
+const assetUrls = [...new Set(props.root.nodes.flatMap((node) =>
+    node.spines.flatMap((spine) => [spine.json, spine.atlas])
+))];
 
 const cacheKeys = new Set<string>();
 
@@ -24,52 +22,115 @@ let applicationReady = false;
 let assetsReady = false;
 let observer: ResizeObserver | undefined;
 
+async function releaseAssets() {
+    if (!assetsReady)
+        return;
+
+    assetsReady = false;
+    await Assets.unload(assetUrls);
+}
+
+async function setup() {
+    const element = host.value;
+    if (!element)
+        return;
+
+    const app = new Application();
+    application = app;
+
+    try
+    {
+        const backgroundColor = getComputedStyle(document.documentElement).getPropertyValue("--color-stage").trim();
+
+        await app.init({
+            width: Math.max(1, element.clientWidth),
+            height: Math.max(1, element.clientHeight),
+            backgroundColor,
+            preference: "webgl",
+            resolution: Math.min(window.devicePixelRatio || 1, 2),
+            powerPreference: "high-performance",
+            autoDensity: true
+        });
+        applicationReady = true;
+
+        if (disposed)
+        {
+            destroyView();
+            return;
+        }
+
+        element.appendChild(app.canvas);
+
+        await Assets.load(assetUrls);
+        assetsReady = true;
+
+        if (disposed)
+        {
+            await releaseAssets();
+            return;
+        }
+
+        const scene = buildScene(app);
+        const resize = () => {
+            if (!disposed)
+                fit(element, app, scene);
+        };
+
+        resize();
+        observer = new ResizeObserver(resize);
+        observer.observe(element);
+        loading.value = false;
+    }
+    catch (error)
+    {
+        if (!disposed)
+        {
+            errorMessage.value = error instanceof Error
+                ? error.message
+                : String(error);
+            loading.value = false;
+        }
+
+        destroyView();
+        await releaseAssets();
+    }
+}
+
 function isCentered(point?: [number, number]) {
-    return !point ||
-        (Math.abs(point[0] - 0.5) < 0.001 &&
-         Math.abs(point[1] - 0.5) < 0.001);
+    return !point || (Math.abs(point[0] - 0.5) < 0.001 && Math.abs(point[1] - 0.5) < 0.001);
 }
 
 function buildScene(app: Application) {
     const containers: Container[] = [];
     let scene: Container | undefined;
 
-    for (const node of props.root.nodes) {
+    for (const node of props.root.nodes)
+    {
         const transform = node.transform;
 
-        // The two Alps roots have centered UI anchors and pivots.
-        if (
-            !isCentered(transform.anchorMin) ||
-            !isCentered(transform.anchorMax) ||
-            !isCentered(transform.pivot)
-        ) {
+        if (!isCentered(transform.anchorMin) || !isCentered(transform.anchorMax) || !isCentered(transform.pivot))
             throw new Error(`Unsupported UI anchors in ${node.name}`);
-        }
-
-        if (
-            Math.abs(transform.rotation[0]) > 0.0001 ||
-            Math.abs(transform.rotation[1]) > 0.0001
-        ) {
+        if (Math.abs(transform.rotation[0]) > 0.0001 || Math.abs(transform.rotation[1]) > 0.0001)
             throw new Error(`Unsupported 3D rotation in ${node.name}`);
-        }
 
         const container = new Container();
-        const [x, y] = transform.anchoredPosition ??
-            [transform.position[0], transform.position[1]];
+        const [x, y] = transform.anchoredPosition ?? [transform.position[0], transform.position[1]];
 
         container.position.set(x, -y);
         container.scale.set(transform.scale[0], transform.scale[1]);
-        container.rotation =
-            -2 * Math.atan2(transform.rotation[2], transform.rotation[3]);
+        container.rotation = -2 * Math.atan2(transform.rotation[2], transform.rotation[3]);
         container.visible = node.activeSelf;
 
-        if (node.parent === null) {
+        if (node.parent === null)
+        {
             if (scene)
                 throw new Error("Prefab has more than one root");
 
             scene = container;
             app.stage.addChild(container);
-        } else {
+        }
+        else
+        {
             const parent = containers[node.parent];
             if (!parent)
                 throw new Error(`Invalid parent for ${node.name}`);
@@ -90,14 +151,8 @@ function buildScene(app: Application) {
 
             if (source.initialSkin)
                 instance.skeleton.setSkinByName(source.initialSkin);
-
-            if (source.initialAnimation) {
-                instance.state.setAnimation(
-                    0,
-                    source.initialAnimation,
-                    source.loop
-                );
-            }
+            if (source.initialAnimation)
+                instance.state.setAnimation(0, source.initialAnimation, source.loop);
 
             instance.state.timeScale = source.timeScale;
             container.addChild(instance);
@@ -119,19 +174,10 @@ function fit(element: HTMLDivElement, app: Application, scene: Container) {
     const contentWidth = bounds.maxX - bounds.minX;
     const contentHeight = bounds.maxY - bounds.minY;
 
-    if (
-        !Number.isFinite(contentWidth) ||
-        !Number.isFinite(contentHeight) ||
-        contentWidth <= 0 ||
-        contentHeight <= 0
-    ) {
+    if (!Number.isFinite(contentWidth) || !Number.isFinite(contentHeight) || contentWidth <= 0 || contentHeight <= 0)
         return;
-    }
 
-    const scale = Math.min(
-        (width * 0.85) / contentWidth,
-        (height * 0.85) / contentHeight
-    );
+    const scale = Math.min((width * 0.85) / contentWidth, (height * 0.85) / contentHeight);
 
     scene.scale.set(scale);
     scene.position.set(
@@ -146,77 +192,13 @@ function destroyView() {
 
     for (const key of cacheKeys)
         Cache.remove(key);
+
     cacheKeys.clear();
 
-    if (applicationReady && application) {
+    if (applicationReady && application)
+    {
         application.destroy(true, { children: true });
         applicationReady = false;
-    }
-}
-
-async function releaseAssets() {
-    if (!assetsReady)
-        return;
-
-    assetsReady = false;
-    await Assets.unload(assetUrls);
-}
-
-async function setup() {
-    const element = host.value;
-    if (!element)
-        return;
-
-    const app = new Application();
-    application = app;
-
-    try {
-        await app.init({
-            width: Math.max(1, element.clientWidth),
-            height: Math.max(1, element.clientHeight),
-            backgroundColor: 0x0b1020,
-            preference: "webgl",
-            resolution: Math.min(window.devicePixelRatio || 1, 2),
-            powerPreference: "high-performance",
-            autoDensity: true
-        });
-        applicationReady = true;
-
-        if (disposed) {
-            destroyView();
-            return;
-        }
-
-        element.appendChild(app.canvas);
-
-        await Assets.load(assetUrls);
-        assetsReady = true;
-
-        if (disposed) {
-            await releaseAssets();
-            return;
-        }
-
-        const scene = buildScene(app);
-        const resize = () => {
-            if (!disposed)
-                fit(element, app, scene);
-        };
-
-        resize();
-        observer = new ResizeObserver(resize);
-        observer.observe(element);
-        loading.value = false;
-    } catch (error) {
-        if (!disposed) {
-            errorMessage.value = error instanceof Error
-                ? error.message
-                : String(error);
-            loading.value = false;
-        }
-
-        destroyView();
-        await releaseAssets();
     }
 }
 
@@ -237,7 +219,7 @@ onUnmounted(() => {
 
         <p
             v-if="loading"
-            class="absolute inset-0 grid place-items-center text-slate-300"
+            class="absolute inset-0 grid place-items-center text-muted"
         >
             Loading Spine assets...
         </p>

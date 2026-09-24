@@ -28,15 +28,35 @@ export interface SpineRoot {
     nodes: SpineNode[];
 }
 
+export interface SpineRender {
+    l2dName: string;
+    bundle: string;
+    status: string;
+    layerCount?: number;
+    root?: SpineRoot;
+}
+
+export interface SpineModel {
+    modelId: number;
+    cardId: number | null;
+    skinType: number | null;
+    characterKey: string | null;
+    englishName: string | null;
+    imageName: string | null;
+    render: SpineRender;
+}
+
+export interface SpineCharacter {
+    roleId: number;
+    names: {
+        english: string | null;
+        local: string | null;
+        alias: string | null;
+    };
+    skins: Record<string, SpineModel>;
+}
+
 export interface SpineManifest {
     schemaVersion: number;
-    characters: Record<string, {
-        skins: Record<string, {
-            render: {
-                status: string;
-                layerCount?: number;
-                root?: SpineRoot;
-            };
-        }>;
-    }>;
+    characters: Record<string, SpineCharacter>;
 }
