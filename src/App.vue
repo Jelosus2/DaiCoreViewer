@@ -130,7 +130,7 @@ onUnmounted(() => controller.abort());
                             :key="model.modelId"
                             :value="String(model.modelId)"
                         >
-                            {{ model.modelId }} · {{ model.render.l2dName }}
+                            {{ model.skinName?.english ?? model.skinName?.local ?? model.render.l2dName }} · {{ model.modelId }}
                         </option>
                     </select>
                 </label>

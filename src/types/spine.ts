@@ -44,6 +44,10 @@ export interface SpineModel {
     englishName: string | null;
     imageName: string | null;
     render: SpineRender;
+    skinName?: {
+        local: string;
+        english: string | null;
+    };
 }
 
 export interface SpineCharacter {
