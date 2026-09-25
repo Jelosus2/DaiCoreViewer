@@ -108,12 +108,18 @@ function buildScene(app: Application) {
     for (const [index, node] of props.root.nodes.entries())
     {
         const transform = node.transform;
-        const isEmptyLeaf = node.spines.length === 0 && !parentIndices.has(index);
+        const hasChildren = parentIndices.has(index);
+        const isEmptyLeaf = node.spines.length === 0 && !hasChildren;
 
-        if (!isCentered(transform.anchorMin) || !isCentered(transform.anchorMax) || !isCentered(transform.pivot))
-            throw new Error(`Unsupported UI anchors in ${node.name}`);
-        if (!isEmptyLeaf && (Math.abs(transform.rotation[0]) > 0.0001 || Math.abs(transform.rotation[1]) > 0.0001))
-            throw new Error(`Unsupported 3D rotation in ${node.name}`);
+        if (node.activeInitially && !isEmptyLeaf)
+        {
+            if (!isCentered(transform.anchorMin) || !isCentered(transform.anchorMax))
+                throw new Error(`Unsupported UI anchors in ${node.name}`);
+            if (hasChildren && !isCentered(transform.pivot))
+                throw new Error(`Unsupported UI pivot in ${node.name}`);
+            if (Math.abs(transform.rotation[0]) > 0.0001 || Math.abs(transform.rotation[1]) > 0.0001)
+                throw new Error(`Unsupported 3D rotation in ${node.name}`);
+        }
 
         const container = new Container();
         const [x, y] = transform.anchoredPosition ?? [transform.position[0], transform.position[1]];

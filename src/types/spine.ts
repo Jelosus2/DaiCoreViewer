@@ -11,6 +11,7 @@ export interface SpineNode {
     name: string;
     parent: number | null;
     activeSelf: boolean;
+    activeInitially: boolean;
     transform: {
         position: [number, number, number];
         anchoredPosition?: [number, number];
