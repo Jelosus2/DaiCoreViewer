@@ -102,15 +102,17 @@ function isCentered(point?: [number, number]) {
 
 function buildScene(app: Application) {
     const containers: Container[] = [];
+    const parentIndices = new Set(props.root.nodes.map((node) => node.parent));
     let scene: Container | undefined;
 
-    for (const node of props.root.nodes)
+    for (const [index, node] of props.root.nodes.entries())
     {
         const transform = node.transform;
+        const isEmptyLeaf = node.spines.length === 0 && !parentIndices.has(index);
 
         if (!isCentered(transform.anchorMin) || !isCentered(transform.anchorMax) || !isCentered(transform.pivot))
             throw new Error(`Unsupported UI anchors in ${node.name}`);
-        if (Math.abs(transform.rotation[0]) > 0.0001 || Math.abs(transform.rotation[1]) > 0.0001)
+        if (!isEmptyLeaf && (Math.abs(transform.rotation[0]) > 0.0001 || Math.abs(transform.rotation[1]) > 0.0001))
             throw new Error(`Unsupported 3D rotation in ${node.name}`);
 
         const container = new Container();
