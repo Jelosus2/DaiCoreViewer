@@ -1,6 +1,7 @@
 export interface SpineAsset {
     json: string;
     atlas: string;
+    pages: string[];
     initialSkin: string;
     initialAnimation: string;
     loop: boolean;

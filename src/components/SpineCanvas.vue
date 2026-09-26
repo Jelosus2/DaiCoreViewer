@@ -14,6 +14,10 @@ const assetUrls = [...new Set(props.root.nodes.flatMap((node) =>
     node.spines.flatMap((spine) => [spine.json, spine.atlas])
 ))];
 
+const pageUrls = [...new Set(props.root.nodes.flatMap((node) =>
+    node.spines.flatMap((spine) => spine.pages)
+))];
+
 const cacheKeys = new Set<string>();
 
 let disposed = false;
@@ -27,7 +31,15 @@ async function releaseAssets() {
         return;
 
     assetsReady = false;
-    await Assets.unload(assetUrls);
+
+    try
+    {
+        await Assets.unload(assetUrls);
+    }
+    finally
+    {
+        await Assets.loader.unload(pageUrls);
+    }
 }
 
 async function setup() {

@@ -16,10 +16,8 @@ const emit = defineEmits<{
 const query = ref("");
 const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
 
-const filteredCharacters = computed(() => {
-    const search = query.value.trim().toLocaleLowerCase();
-
-    return Object.entries(props.characters)
+const displayableCharacters = computed(() =>
+    Object.entries(props.characters)
         .map(([id, character]) => ({
             id,
             name: character.names.english ?? character.names.alias ?? character.names.local ?? id,
@@ -34,6 +32,13 @@ const filteredCharacters = computed(() => {
                 ...Object.keys(character.skins)
             ].filter((value) => value !== null).join(" ").toLocaleLowerCase()
         }))
+        .filter((character) => character.readyCount > 0)
+);
+
+const filteredCharacters = computed(() => {
+    const search = query.value.trim().toLocaleLowerCase();
+
+    return displayableCharacters.value
         .filter((character) => character.searchText.includes(search))
         .sort((a, b) => collator.compare(a.name, b.name) || collator.compare(a.id, b.id));
 });
@@ -56,7 +61,7 @@ const filteredCharacters = computed(() => {
                 class="mt-1 w-full rounded border border-line bg-control px-3 py-2 text-white focus:border-focus focus:outline-none"
             />
             <p class="mt-2 text-xs text-subtle">
-                {{ filteredCharacters.length }} of {{ Object.keys(characters).length }}
+                {{ filteredCharacters.length }} of {{ displayableCharacters.length }}
             </p>
         </div>
 
@@ -85,7 +90,7 @@ const filteredCharacters = computed(() => {
                             {{ character.alias }} · {{ character.id }}
                         </span>
                         <span class="block text-xs opacity-80">
-                            {{ character.readyCount }}/{{ character.modelCount }} ready
+                            {{ character.readyCount }} of {{ character.modelCount }} ready
                         </span>
                     </button>
                 </li>
