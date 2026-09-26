@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import type { SpineRoot } from "@/types/spine";
+import type { SpineRoot, SpinePlacement, SpineFraming } from "@/types/spine";
 
 import { Spine, SetupPoseBoundsProvider } from "@esotericsoftware/spine-pixi-v8";
 import { Application, Assets, Cache, Container } from "pixi.js";
-import { onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 
-const props = defineProps<{ root: SpineRoot }>();
+const props = defineProps<{
+    root: SpineRoot;
+    placement?: SpinePlacement;
+    framing: SpineFraming;
+}>();
+
 const host = useTemplateRef<HTMLDivElement>("host");
 const loading = ref(true);
 const errorMessage = ref("");
@@ -25,6 +30,9 @@ let application: Application | undefined;
 let applicationReady = false;
 let assetsReady = false;
 let observer: ResizeObserver | undefined;
+let reframe: (() => void) | undefined;
+
+watch([() => props.framing, () => props.placement], () => reframe?.());
 
 async function releaseAssets() {
     if (!assetsReady)
@@ -82,12 +90,19 @@ async function setup() {
             return;
         }
 
-        const scene = buildScene(app);
+        const camera = new Container();
+        const portrait = new Container();
+
+        app.stage.addChild(camera);
+        camera.addChild(portrait);
+        buildScene(portrait);
+
         const resize = () => {
             if (!disposed)
-                fit(element, app, scene);
+                frame(element, app, camera, portrait, props.placement, props.framing);
         };
 
+        reframe = resize;
         resize();
         observer = new ResizeObserver(resize);
         observer.observe(element);
@@ -112,7 +127,7 @@ function isCentered(point?: [number, number]) {
     return !point || (Math.abs(point[0] - 0.5) < 0.001 && Math.abs(point[1] - 0.5) < 0.001);
 }
 
-function buildScene(app: Application) {
+function buildScene(stageParent: Container) {
     const containers: Container[] = [];
     const parentIndices = new Set(props.root.nodes.map((node) => node.parent));
     let scene: Container | undefined;
@@ -147,7 +162,7 @@ function buildScene(app: Application) {
                 throw new Error("Prefab has more than one root");
 
             scene = container;
-            app.stage.addChild(container);
+            stageParent.addChild(container);
         }
         else
         {
@@ -185,12 +200,33 @@ function buildScene(app: Application) {
     return scene;
 }
 
-function fit(element: HTMLDivElement, app: Application, scene: Container) {
+function frame(
+    element: HTMLDivElement,
+    app: Application,
+    camera: Container,
+    portrait: Container,
+    placement: SpinePlacement | undefined,
+    framing: SpineFraming
+) {
     const width = Math.max(1, element.clientWidth);
     const height = Math.max(1, element.clientHeight);
     app.renderer.resize(width, height);
 
-    const bounds = scene.getLocalBounds();
+    portrait.position.set(0, 0);
+    portrait.scale.set(1);
+
+    if (framing === "game" && placement)
+    {
+        portrait.position.set(placement[0], -placement[1]);
+        portrait.scale.set(placement[2]);
+
+        const canvasScale = Math.min(width / 1920, height / 1080);
+        camera.scale.set(canvasScale);
+        camera.position.set(width / 2, height / 2);
+        return;
+    }
+
+    const bounds = camera.getLocalBounds();
     const contentWidth = bounds.maxX - bounds.minX;
     const contentHeight = bounds.maxY - bounds.minY;
 
@@ -199,14 +235,16 @@ function fit(element: HTMLDivElement, app: Application, scene: Container) {
 
     const scale = Math.min((width * 0.85) / contentWidth, (height * 0.85) / contentHeight);
 
-    scene.scale.set(scale);
-    scene.position.set(
+    camera.scale.set(scale);
+    camera.position.set(
         width / 2 - ((bounds.minX + bounds.maxX) / 2) * scale,
         height / 2 - ((bounds.minY + bounds.maxY) / 2) * scale
     );
 }
 
 function destroyView() {
+    reframe = undefined;
+
     observer?.disconnect();
     observer = undefined;
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SpineManifest } from "./types/spine";
+import type { SpineManifest, SpineFraming } from "./types/spine";
 import type { ViewerCategory } from "./types/viewer.ts";
 import { viewerCategories } from "./types/viewer.ts";
 
@@ -11,6 +11,7 @@ import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 
 const manifest = shallowRef<SpineManifest | null>(null);
 const category = ref<ViewerCategory>("characters");
+const framing = ref<SpineFraming>("game");
 const selectedItemId = ref<string | null>(null);
 const selectedOptionId = ref<string | null>(null);
 const loading = ref(true);
@@ -141,12 +142,30 @@ onUnmounted(() => controller.abort());
                 >
                     {{ selectedOption.render.layerCount }} layer(s)
                 </p>
+
+                <label
+                    v-if="root && selectedOption?.placement"
+                    for="framing-select"
+                    class="grid gap-1 text-sm text-muted"
+                >
+                    View
+                    <select
+                        id="framing-select"
+                        v-model="framing"
+                        class="rounded border border-line bg-control px-3 py-2 focus:border-focus focus:outline-none"
+                    >
+                        <option value="game">Game framing</option>
+                        <option value="fit">Fit asset</option>
+                    </select>
+                </label>
             </div>
 
             <SpineCanvas
                 v-if="root"
                 :key="`${category}:${selectedItemId}:${selectedOptionId}`"
                 :root="root"
+                :placement="selectedOption?.placement"
+                :framing="framing"
                 class="mt-5 h-[60vh] min-h-80 overflow-hidden rounded-xl border border-line bg-stage lg:min-h-0 lg:flex-1"
             />
             <div

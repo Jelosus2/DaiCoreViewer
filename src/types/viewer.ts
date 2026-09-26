@@ -1,4 +1,4 @@
-import type { SpineRender } from "./spine";
+import type { SpineRender, SpinePlacement } from "./spine";
 
 export const viewerCategories = [
     { id: "characters", label: "Characters" },
@@ -14,6 +14,7 @@ export type ViewerCategory = (typeof viewerCategories)[number]["id"];
 export interface ViewerOption {
     id: string;
     label: string;
+    placement?: SpinePlacement;
     render: SpineRender;
 }
 

@@ -1,3 +1,6 @@
+export type SpineFraming = "game" | "fit";
+export type SpinePlacement = [x: number, y: number, scale: number];
+
 export interface SpineAsset {
     json: string;
     atlas: string;
@@ -47,6 +50,7 @@ export interface SpineModel {
     englishName: string | null;
     imageName: string | null;
     render: SpineRender;
+    l2dPos?: SpinePlacement;
     skinName?: {
         local: string;
         english: string | null;
@@ -67,6 +71,7 @@ export interface SpineArchivePicture {
     id: number;
     name: string | null;
     imageName: string | null;
+    l2dPos?: SpinePlacement;
     render: SpineRender;
 }
 

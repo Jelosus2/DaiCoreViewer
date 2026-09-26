@@ -23,6 +23,7 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
         const options = models.map((model) => ({
             id: String(model.modelId),
             label: `${model.skinName?.english ?? model.skinName?.local ?? model.render.l2dName} · ${model.modelId}`,
+            placement: model.l2dPos,
             render: model.render
         }));
 
@@ -49,6 +50,7 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
         addIfReady(catalog.asmr, makeItem(String(item.id), name, `${item.name ?? item.l2dName} · ASMR ${item.id}`, [{
             id: String(item.id),
             label: item.l2dName,
+            placement: [0, 0, 1],
             render: item.render
         }]));
     }
@@ -58,6 +60,7 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
         addIfReady(catalog.archives, makeItem(String(item.id), item.name ?? item.render.l2dName, `${item.render.l2dName} · Archive ${item.id}`, [{
             id: String(item.id),
             label: item.render.l2dName,
+            placement: item.l2dPos,
             render: item.render
         }]));
     }
@@ -71,9 +74,14 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
 
         // Some action tables repeat the same target. Show each render once.
         const targets = [...new Map(action.targets.map((target) => [target.l2dName, target])).values()];
+        const placement = related?.model.l2dPos
+            ?? manifest.ungroupedModels[String(action.id)]?.l2dPos
+            ?? manifest.archivePictures[String(action.id)]?.l2dPos;
+
         const options = targets.map((target, index) => ({
             id: String(index),
             label: target.l2dName,
+            placement,
             render: target.render
         }));
 
@@ -95,6 +103,7 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
                 [{
                     id: String(model.modelId),
                     label: model.render.l2dName,
+                    placement: model.l2dPos,
                     render: model.render
                 }]
             )
