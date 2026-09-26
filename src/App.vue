@@ -1,72 +1,61 @@
 <script setup lang="ts">
-import type { SpineManifest, SpineCharacter, SpineModel } from "@/types/spine";
+import type { SpineManifest } from "./types/spine";
+import type { ViewerCategory } from "./types/viewer.ts";
+import { viewerCategories } from "./types/viewer.ts";
 
-import CharacterSidebar from "./components/CharacterSidebar.vue";
+import AssetSidebar from "./components/AssetSidebar.vue";
 import SpineCanvas from "./components/SpineCanvas.vue";
 
+import { buildSpineCatalog } from "./catalog/buildSpineCatalog.ts";
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 
 const manifest = shallowRef<SpineManifest | null>(null);
-const selectedCharacterId = ref<string | null>(null);
-const selectedModelId = ref<string | null>(null);
+const category = ref<ViewerCategory>("characters");
+const selectedItemId = ref<string | null>(null);
+const selectedOptionId = ref<string | null>(null);
 const loading = ref(true);
 const errorMessage = ref("");
 const controller = new AbortController();
 
-const characters = computed<SpineManifest["characters"]>(() => manifest.value?.characters ?? {});
-const selectedCharacter = computed<SpineCharacter | undefined>(() =>
-    selectedCharacterId.value
-        ? characters.value[selectedCharacterId.value]
-        : undefined
-);
-
-const models = computed<SpineModel[]>(() =>
-    selectedCharacter.value
-        ? Object.values(selectedCharacter.value.skins).sort((a, b) => a.modelId - b.modelId)
-        : []
-);
-
-const selectedModel = computed<SpineModel | undefined>(() =>
-    selectedModelId.value
-        ? selectedCharacter.value?.skins[selectedModelId.value]
-        : undefined
-);
-
-const characterName = computed(() =>
-    selectedCharacter.value?.names.english ??
-    selectedCharacter.value?.names.alias ??
-    selectedCharacter.value?.names.local ??
-    "Select a character"
-);
+const catalog = computed(() => buildSpineCatalog(manifest.value));
+const items = computed(() => catalog.value[category.value]);
+const selectedItem = computed(() => items.value.find((item) => item.id === selectedItemId.value));
+const selectedOption = computed(() => selectedItem.value?.options.find((option) => option.id === selectedOptionId.value));
+const categoryLabel = computed(() => viewerCategories.find((item) => item.id === category.value)?.label ?? "Assets");
 
 const root = computed(() =>
-    selectedModel.value?.render.status === "ready"
-        ? selectedModel.value.render.root ?? null
+    selectedOption.value?.render.status === "ready"
+        ? selectedOption.value.render.root ?? null
         : null
 );
 
 const unavailableMessage = computed(() => {
-    const model = selectedModel.value;
+    if (!selectedItem.value)
+        return `Choose an asset from ${categoryLabel.value}.`;
 
-    if (!model)
-        return "Choose a model to view.";
-    if (model.render.status === "missing_bundle")
-        return "This model's bundle is missing from the game cache.";
-    if (model.render.status === "ready")
-        return "This model has no prefab root in the manifest.";
+    const render = selectedOption.value?.render;
+    if (!render)
+        return "Choose a variant to view.";
 
-    return `This model is unavailable (${model.render.status.replaceAll("_", " ")}).`
+    if (render.status === "missing_bundle")
+        return "This bundle is missing from the game cache.";
+
+    return render.reason ?? `This asset is unavailable (${render.status.replaceAll("_", " ")}).`;
 });
 
-function chooseCharacter(id: string) {
-    const character = characters.value[id];
-    if (!character)
+function chooseItem(id: string | null) {
+    selectedItemId.value = id;
+
+    const item = items.value.find((entry) => entry.id === id);
+    selectedOptionId.value = item?.options.find((option) => option.render.status === "ready")?.id ?? item?.options[0]?.id ?? null;
+}
+
+function chooseCategory(next: ViewerCategory) {
+    if (category.value === next)
         return;
 
-    selectedCharacterId.value = id;
-
-    const entries = Object.entries(character.skins);
-    selectedModelId.value = (entries.find(([, model]) => model.render.status === "ready") ?? entries[0])?.[0] ?? null;
+    category.value = next;
+    chooseItem(catalog.value[next][0]?.id ?? null);
 }
 
 onMounted(async () => {
@@ -106,42 +95,57 @@ onUnmounted(() => controller.abort());
 
 <template>
     <main class="flex min-h-screen flex-col bg-page text-white lg:h-screen lg:flex-row">
-        <CharacterSidebar
-            :characters="characters"
-            :selected-id="selectedCharacterId"
+        <AssetSidebar
+            :catalog="catalog"
+            :category="category"
+            :selected-id="selectedItemId"
             :loading="loading"
-            @select="chooseCharacter"
+            @category="chooseCategory"
+            @select="chooseItem"
         />
 
         <section class="flex min-h-0 min-w-0 flex-1 flex-col p-5">
             <h1 class="text-2xl font-bold">DaiCoreViewer</h1>
-            <p class="mt-1 text-muted">{{ characterName }}</p>
+            <p class="mt-1 text-muted">
+                {{ selectedItem?.name ?? "Select an asset" }}
+            </p>
+            <p v-if="selectedItem" class="mt-1 text-sm text-subtle">
+                {{ selectedItem.detail }}
+            </p>
 
-            <div v-if="selectedCharacter" class="mt-5 flex flex-wrap items-end gap-4">
-                <label for="model-select" class="grid gap-1 text-sm text-muted">
-                    Skin / model
+            <div v-if="selectedItem" class="mt-5 flex flex-wrap items-end gap-4">
+                <label
+                    v-if="selectedItem.options.length > 1"
+                    for="option-select"
+                    class="grid gap-1 text-sm text-muted"
+                >
+                    {{ category === "characters" ? "Skin / model" : "Variant" }}
                     <select
-                        id="model-select"
-                        v-model="selectedModelId"
+                        id="option-select"
+                        v-model="selectedOptionId"
                         class="min-w-64 rounded border border-line bg-control px-3 py-2 focus:border-focus focus:outline-none"
                     >
                         <option
-                            v-for="model in models"
-                            :key="model.modelId"
-                            :value="String(model.modelId)"
+                            v-for="option in selectedItem.options"
+                            :key="option.id"
+                            :value="option.id"
                         >
-                            {{ model.skinName?.english ?? model.skinName?.local ?? model.render.l2dName }} · {{ model.modelId }}
+                            {{ option.label }}
                         </option>
                     </select>
                 </label>
-                <p v-if="selectedModel?.render.status === 'ready'" class="pb-2 text-sm text-subtle">
-                    {{ selectedModel.render.layerCount }} layer(s)
+
+                <p
+                    v-if="selectedOption?.render.status === 'ready'"
+                    class="pb-2 text-sm text-subtle"
+                >
+                    {{ selectedOption.render.layerCount }} layer(s)
                 </p>
             </div>
 
             <SpineCanvas
                 v-if="root"
-                :key="selectedCharacterId + ':' + selectedModelId"
+                :key="`${category}:${selectedItemId}:${selectedOptionId}`"
                 :root="root"
                 class="mt-5 h-[60vh] min-h-80 overflow-hidden rounded-xl border border-line bg-stage lg:min-h-0 lg:flex-1"
             />

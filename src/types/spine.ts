@@ -34,6 +34,7 @@ export interface SpineRender {
     l2dName: string;
     bundle: string;
     status: string;
+    reason?: string;
     layerCount?: number;
     root?: SpineRoot;
 }
@@ -62,7 +63,52 @@ export interface SpineCharacter {
     skins: Record<string, SpineModel>;
 }
 
+export interface SpineArchivePicture {
+    id: number;
+    name: string | null;
+    imageName: string | null;
+    render: SpineRender;
+}
+
+export interface SpineAsmr {
+    id: number;
+    modelId: number | null;
+    name: string | null;
+    l2dName: string;
+    bundle: string;
+    present: boolean;
+    render: SpineRender;
+}
+
+export interface SpineActionTarget {
+    l2dName: string;
+    bundle: string;
+    present: boolean;
+    render: SpineRender;
+}
+
+export interface SpineActionTransition {
+    table: string;
+    id: number;
+    targets: SpineActionTarget[];
+}
+
+export interface SpineOtherAsset {
+    bundle: string;
+    name: string;
+    rootIndex: number;
+    render: SpineRender;
+}
+
 export interface SpineManifest {
     schemaVersion: number;
     characters: Record<string, SpineCharacter>;
+    ungroupedModels: Record<string, SpineModel>;
+    archivePictures: Record<string, SpineArchivePicture>;
+    special: {
+        asmr: SpineAsmr[];
+        actionTransitions: SpineActionTransition[];
+    } | null;
+    otherSpineBundles: string[];
+    otherSpineAssets?: SpineOtherAsset[];
 }
