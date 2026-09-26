@@ -1,20 +1,10 @@
 <script setup lang="ts">
-import type { SpineRoot, SpinePlacement, SpineFraming, SpineActionConfig, SpineActionItem } from "@/types/spine";
+import type { SpineRoot, SpinePlacement, SpineFraming, SpineActionConfig } from "@/types/spine";
 
-import { Spine, SetupPoseBoundsProvider } from "@esotericsoftware/spine-pixi-v8";
-import { Application, Assets, Cache, Container, Graphics, Rectangle, UPDATE_PRIORITY } from "pixi.js";
+import { buildSpineScene } from "@/spine/buildSpineScene";
+import { createSpineInteractions } from "@/spine/createSpineInteractions";
+import { Application, Assets, Cache, Container } from "pixi.js";
 import { onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
-
-type TrackEntry = ReturnType<Spine["state"]["setAnimation"]>;
-
-interface StagedTap {
-    entry: TrackEntry;
-    animationName: string;
-    duration: number;
-    points: number[];
-    step: number;
-    targetTime: number;
-}
 
 const props = defineProps<{
     root: SpineRoot;
@@ -38,7 +28,6 @@ const pageUrls = [...new Set(props.root.nodes.flatMap((node) =>
 ))];
 
 const cacheKeys = new Set<string>();
-const hotspotOutlines: Graphics[] = [];
 const viewOffset = { x: 0, y: 0 };
 
 let disposed = false;
@@ -48,14 +37,12 @@ let assetsReady = false;
 let observer: ResizeObserver | undefined;
 let reframe: (() => void) | undefined;
 let activeCamera: Container | undefined;
-let stopStageUpdates: (() => void) | undefined;
-let nextTapAt = 0;
+let interactions: ReturnType<typeof createSpineInteractions> | undefined;
 
 watch([() => props.framing, () => props.placement], resetZoom);
 
 watch(() => props.showHotspots, (show) => {
-    for (const outline of hotspotOutlines)
-        outline.visible = show;
+    interactions?.setDebugVisible(show);
 });
 
 async function releaseAssets() {
@@ -123,9 +110,9 @@ async function setup() {
         camera.addChild(portrait);
         portrait.addChild(artLayer, hotspotLayer);
 
-        const spines = buildScene(artLayer);
+        const spines = buildSpineScene(props.root, artLayer, cacheKeys);
         if (spines.length === 1 && props.interaction)
-            addHotspots(hotspotLayer, spines[0]!, props.interaction);
+            interactions = createSpineInteractions(hotspotLayer, spines[0], props.interaction, props.showHotspots);
 
         activeCamera = camera;
 
@@ -153,86 +140,6 @@ async function setup() {
         destroyView();
         await releaseAssets();
     }
-}
-
-function isCentered(point?: [number, number]) {
-    return !point || (Math.abs(point[0] - 0.5) < 0.001 && Math.abs(point[1] - 0.5) < 0.001);
-}
-
-function buildScene(stageParent: Container) {
-    const containers: Container[] = [];
-    const instances: Spine[] = [];
-    const parentIndices = new Set(props.root.nodes.map((node) => node.parent));
-    let scene: Container | undefined;
-
-    for (const [index, node] of props.root.nodes.entries())
-    {
-        const transform = node.transform;
-        const hasChildren = parentIndices.has(index);
-        const isEmptyLeaf = node.spines.length === 0 && !hasChildren;
-
-        if (node.activeInitially && !isEmptyLeaf)
-        {
-            if (!isCentered(transform.anchorMin) || !isCentered(transform.anchorMax))
-                throw new Error(`Unsupported UI anchors in ${node.name}`);
-            if (hasChildren && !isCentered(transform.pivot))
-                throw new Error(`Unsupported UI pivot in ${node.name}`);
-            if (Math.abs(transform.rotation[0]) > 0.0001 || Math.abs(transform.rotation[1]) > 0.0001)
-                throw new Error(`Unsupported 3D rotation in ${node.name}`);
-        }
-
-        const container = new Container();
-        const [x, y] = transform.anchoredPosition ?? [transform.position[0], transform.position[1]];
-
-        container.position.set(x, -y);
-        container.scale.set(transform.scale[0], transform.scale[1]);
-        container.rotation = -2 * Math.atan2(transform.rotation[2], transform.rotation[3]);
-        container.visible = node.activeSelf;
-
-        if (node.parent === null)
-        {
-            if (scene)
-                throw new Error("Prefab has more than one root");
-
-            scene = container;
-            stageParent.addChild(container);
-        }
-        else
-        {
-            const parent = containers[node.parent];
-            if (!parent)
-                throw new Error(`Invalid parent for ${node.name}`);
-
-            parent.addChild(container);
-        }
-
-        containers.push(container);
-
-        for (const source of node.spines) {
-            const instance = Spine.from({
-                skeleton: source.json,
-                atlas: source.atlas,
-                boundsProvider: new SetupPoseBoundsProvider()
-            });
-
-            cacheKeys.add(`${source.json}-${source.atlas}-1`);
-
-            if (source.initialSkin)
-                instance.skeleton.setSkinByName(source.initialSkin);
-            if (source.initialAnimation)
-                instance.state.setAnimation(0, source.initialAnimation, source.loop);
-
-            instance.state.timeScale = source.timeScale;
-
-            container.addChild(instance);
-            instances.push(instance);
-        }
-    }
-
-    if (!scene)
-        throw new Error("Prefab has no root node");
-
-    return instances;
 }
 
 function resetZoom() {
@@ -314,232 +221,6 @@ function frame(
     );
 }
 
-function hasTapArea(item: SpineActionItem): boolean {
-    const area = item.areas?.[0];
-
-    return item.gesture === 0 &&
-        (item.role ?? 1) === 1 &&
-        !!item.sName &&
-        item.sName !== "in" &&
-        !!area &&
-        area.every(Number.isFinite) &&
-        area[2] > 0 &&
-        area[3] > 0;
-}
-
-function isSimpleTap(item: SpineActionItem): boolean {
-    return hasTapArea(item) &&
-        (item.sType === 2 || item.sType === 6) &&
-        item.content === undefined &&
-        (item.sType !== 6 || (Number.isInteger(item.index) && item.index > 0));
-}
-
-function stagedTapPoints(item: SpineActionItem): number[] | undefined {
-    const content = item.content;
-
-    if (
-        !hasTapArea(item) ||
-        item.sType !== 7 ||
-        !Number.isInteger(item.index) ||
-        item.index <= 1 ||
-        !content ||
-        Object.keys(content).length !== 1
-    )
-    {
-        return;
-    }
-
-    const raw = content.clicks;
-    if (!Array.isArray(raw) || raw.length === 0)
-        return;
-
-    const points: number[] = [];
-    let previous = 0;
-
-    for (const [index, value] of raw.entries())
-    {
-        if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)
-            return;
-
-        if (value === 0)
-        {
-            // A zero target means reverse to the start; it must be the final step.
-            if (index !== raw.length - 1 || index === 0)
-                return;
-        }
-        else if (value <= previous)
-        {
-            return;
-        }
-
-        points.push(value);
-        previous = value;
-    }
-
-    return points;
-}
-
-function addHotspots(layer: Container, spine: Spine, interaction: SpineActionConfig) {
-    const stages = new Map<number, StagedTap>();
-    let tracking = false;
-
-    function stopTracking() {
-        if (!tracking)
-            return;
-
-        spine.ticker.remove(updateStages);
-        tracking = false;
-    }
-
-    function updateStages() {
-        for (const [trackIndex, stage] of stages)
-        {
-            if (spine.state.getCurrent(trackIndex) !== stage.entry)
-            {
-                stages.delete(trackIndex);
-                continue;
-            }
-
-            const reached = stage.entry.timeScale > 0
-                ? stage.entry.trackTime >= stage.targetTime
-                : stage.entry.timeScale < 0 && stage.entry.trackTime <= stage.targetTime;
-
-            if (!reached)
-                continue;
-
-            if (stage.step === stage.points.length - 1)
-            {
-                stage.entry.trackTime = 0;
-                spine.state.clearTrack(trackIndex);
-                spine.skeleton.setToSetupPose();
-                stages.delete(trackIndex);
-            }
-            else
-            {
-                stage.entry.trackTime = stage.targetTime;
-                stage.entry.timeScale = 0;
-            }
-        }
-
-        if (stages.size === 0)
-            stopTracking();
-    }
-
-    function playStaged(item: SpineActionItem, animationName: string, duration: number, points: number[]) {
-        const trackIndex = item.index;
-        let stage = stages.get(trackIndex);
-
-        if (stage && spine.state.getCurrent(trackIndex) !== stage.entry)
-        {
-            stages.delete(trackIndex);
-            stage = undefined;
-        }
-
-        if (stage)
-        {
-            if (stage.animationName !== animationName || stage.entry.timeScale !== 0)
-                return;
-
-            const step = stage.step + 1;
-            if (step >= stage.points.length)
-                return;
-
-            stage.step = step;
-            stage.targetTime = stage.points[step] * stage.duration;
-            stage.entry.timeScale = stage.points[step] === 0 ? -1 : 1;
-            return;
-        }
-
-        const entry = spine.state.setAnimation(trackIndex, animationName, false);
-        entry.timeScale = 1;
-
-        stages.set(trackIndex, {
-            entry,
-            animationName,
-            duration,
-            points,
-            step: 0,
-            targetTime: points[0] * duration
-        });
-
-        if (!tracking)
-        {
-            spine.ticker.add(updateStages, undefined, UPDATE_PRIORITY.LOW);
-            tracking = true;
-        }
-    }
-
-    stopStageUpdates = () => {
-        stopTracking();
-        stages.clear();
-    };
-
-    for (const item of interaction.items)
-    {
-        const points = stagedTapPoints(item);
-        if (!isSimpleTap(item) && !points)
-            continue;
-
-        const animationName = item.sName;
-        const area = item.areas?.[0];
-
-        if (!animationName || !area)
-            continue;
-
-        const animation = spine.skeleton.data.findAnimation(animationName);
-        if (!animation || (points && animation.duration <= 0))
-            continue;
-
-        const [x, y, width, height, angle] = area;
-        const hitbox = new Container();
-
-        hitbox.position.set(x, -y);
-        hitbox.rotation = -angle * Math.PI / 180;
-        hitbox.hitArea = new Rectangle(-width / 2, -height / 2, width, height);
-        hitbox.eventMode = "static";
-        hitbox.cursor = "pointer";
-
-        const outline = new Graphics()
-            .rect(-width / 2, -height / 2, width, height)
-            .stroke({ color: 0xc7aa83, width: 2 });
-
-        outline.eventMode = "none";
-        outline.visible = props.showHotspots;
-
-        hotspotOutlines.push(outline);
-        hitbox.addChild(outline);
-
-        hitbox.on("pointertap", () => {
-            const now = performance.now();
-            if (disposed || now < nextTapAt)
-                return;
-
-            if (!points && item.sType === 2 && spine.state.getCurrent(1))
-                return;
-
-            nextTapAt = now + 500;
-
-            if (points)
-            {
-                playStaged(item, animationName, animation.duration, points);
-            }
-            else if (item.sType === 2)
-            {
-                spine.state.setEmptyAnimation(1, 0);
-                const entry = spine.state.addAnimation(1, animationName, false, 0);
-                entry.mixDuration = 0.2;
-                spine.state.addEmptyAnimation(1, 0.5, 0);
-            }
-            else
-            {
-                spine.state.setAnimation(item.index, animationName, false);
-            }
-        });
-
-        layer.addChild(hitbox);
-    }
-}
-
 function destroyView() {
     reframe = undefined;
 
@@ -551,8 +232,8 @@ function destroyView() {
 
     cacheKeys.clear();
 
-    stopStageUpdates?.();
-    stopStageUpdates = undefined;
+    interactions?.destroy();
+    interactions = undefined;
 
     if (applicationReady && application)
     {
@@ -560,7 +241,6 @@ function destroyView() {
         applicationReady = false;
     }
 
-    hotspotOutlines.length = 0;
     activeCamera = undefined;
 }
 

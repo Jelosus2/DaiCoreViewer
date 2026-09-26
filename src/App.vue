@@ -6,7 +6,7 @@ import { viewerCategories } from "./types/viewer.ts";
 import AssetSidebar from "./components/AssetSidebar.vue";
 import SpineCanvas from "./components/SpineCanvas.vue";
 
-import { buildSpineCatalog } from "./catalog/buildSpineCatalog.ts";
+import { buildSpineCatalog } from "./spine/buildSpineCatalog.ts";
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 
 const manifest = shallowRef<SpineManifest | null>(null);
