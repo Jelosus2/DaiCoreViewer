@@ -24,6 +24,7 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
             id: String(model.modelId),
             label: `${model.skinName?.english ?? model.skinName?.local ?? model.render.l2dName} · ${model.modelId}`,
             placement: model.l2dPos,
+            interaction: model.interaction,
             render: model.render
         }));
 
@@ -61,6 +62,7 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
             id: String(item.id),
             label: item.render.l2dName,
             placement: item.l2dPos,
+            interaction: item.interaction,
             render: item.render
         }]));
     }
@@ -104,6 +106,7 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
                     id: String(model.modelId),
                     label: model.render.l2dName,
                     placement: model.l2dPos,
+                    interaction: model.interaction,
                     render: model.render
                 }]
             )

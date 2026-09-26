@@ -1,6 +1,14 @@
 export type SpineFraming = "game" | "fit";
 export type SpinePlacement = [x: number, y: number, scale: number];
 
+export type SpineActionValue =
+    | string
+    | number
+    | boolean
+    | null
+    | SpineActionValue[]
+    | { [key: string]: SpineActionValue };
+
 export interface SpineAsset {
     json: string;
     atlas: string;
@@ -42,6 +50,32 @@ export interface SpineRender {
     root?: SpineRoot;
 }
 
+export type SpineActionArea = [
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    angleDegrees: number
+];
+
+export interface SpineActionItem {
+    index: number;
+    sType: number;
+    gesture: number;
+    sName?: string;
+    role?: number;
+    areas?: SpineActionArea[];
+    audioId?: number[] | Record<string, number>;
+    hideTxt?: number;
+    content?: Record<string, SpineActionValue>;
+}
+
+export interface SpineActionConfig {
+    id: number;
+    key: string | number;
+    items: SpineActionItem[];
+}
+
 export interface SpineModel {
     modelId: number;
     cardId: number | null;
@@ -51,6 +85,7 @@ export interface SpineModel {
     imageName: string | null;
     render: SpineRender;
     l2dPos?: SpinePlacement;
+    interaction?: SpineActionConfig;
     skinName?: {
         local: string;
         english: string | null;
@@ -72,6 +107,7 @@ export interface SpineArchivePicture {
     name: string | null;
     imageName: string | null;
     l2dPos?: SpinePlacement;
+    interaction?: SpineActionConfig;
     render: SpineRender;
 }
 

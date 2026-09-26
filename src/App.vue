@@ -16,6 +16,7 @@ const selectedItemId = ref<string | null>(null);
 const selectedOptionId = ref<string | null>(null);
 const loading = ref(true);
 const errorMessage = ref("");
+const showHotspots = ref(false);
 const controller = new AbortController();
 
 const catalog = computed(() => buildSpineCatalog(manifest.value));
@@ -158,6 +159,14 @@ onUnmounted(() => controller.abort());
                         <option value="fit">Fit asset</option>
                     </select>
                 </label>
+
+                <label
+                    v-if="root && selectedOption?.interaction && selectedOption.render.layerCount === 1"
+                    class="flex items-center gap-2 pb-2 text-sm text-muted"
+                >
+                    <input v-model="showHotspots" type="checkbox" class="accent-focus">
+                    Show tap regions
+                </label>
             </div>
 
             <SpineCanvas
@@ -166,6 +175,8 @@ onUnmounted(() => controller.abort());
                 :root="root"
                 :placement="selectedOption?.placement"
                 :framing="framing"
+                :interaction="selectedOption?.interaction"
+                :show-hotspots="showHotspots"
                 class="mt-5 h-[60vh] min-h-80 overflow-hidden rounded-xl border border-line bg-stage lg:min-h-0 lg:flex-1"
             />
             <div
