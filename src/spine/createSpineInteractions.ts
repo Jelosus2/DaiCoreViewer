@@ -1,5 +1,6 @@
 import type { SpineActionConfig, SpineActionItem } from "@/types/spine";
 
+import { parseSpineTap, type ParsedSpineTap } from "./parseSpineTap";
 import { Spine } from "@esotericsoftware/spine-pixi-v8";
 import { Container, Graphics, Rectangle, UPDATE_PRIORITY } from "pixi.js";
 
@@ -7,19 +8,22 @@ type TrackEntry = ReturnType<Spine["state"]["setAnimation"]>;
 
 interface StagedTap {
     entry: TrackEntry;
-    animationName: string;
+    action: ParsedSpineTap;
     duration: number;
-    points: number[];
     step: number;
     targetTime: number;
 }
 
 export function createSpineInteractions(layer: Container, spine: Spine, interaction: SpineActionConfig, showHotspots: boolean) {
+    const actions = interaction.items.map((item) => parseSpineTap(item, spine)).filter((action): action is ParsedSpineTap => action !== undefined);
+    const hitboxes = new Map<number, Container>();
     const outlines: Graphics[] = [];
     const stages = new Map<number, StagedTap>();
+    const orderPositions = new Map<number, number>();
     let tracking = false;
     let destroyed = false;
     let nextTapAt = 0;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
     function stopTracking() {
         if (!tracking)
@@ -27,6 +31,20 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
 
         spine.ticker.remove(updateStages);
         tracking = false;
+    }
+
+    function setActive(index: number, active: boolean) {
+        const hitbox = hitboxes.get(index);
+        if (!hitbox)
+            return;
+
+        hitbox.visible = active;
+        hitbox.eventMode = active ? "static" : "none";
+    }
+
+    function applyActivation(action: ParsedSpineTap, reverse: boolean) {
+        for (const [index, active] of action.activation ?? [])
+            setActive(index, reverse ? !active : active);
     }
 
     function updateStages() {
@@ -45,17 +63,25 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
             if (!reached)
                 continue;
 
-            if (stage.step === stage.points.length - 1)
+            const points = stage.action.clicks!;
+
+            if (stage.step === points.length - 1)
             {
                 stage.entry.trackTime = 0;
+
                 spine.state.clearTrack(trackIndex);
                 spine.skeleton.setToSetupPose();
+                spine.update(0);
+
+                applyActivation(stage.action, true);
                 stages.delete(trackIndex);
             }
             else
             {
                 stage.entry.trackTime = stage.targetTime;
                 stage.entry.timeScale = 0;
+
+                spine.update(0);
             }
         }
 
@@ -63,8 +89,9 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
             stopTracking();
     }
 
-    function playStaged(item: SpineActionItem, animationName: string, duration: number, points: number[]) {
-        const trackIndex = item.index;
+    function playStaged(action: ParsedSpineTap): boolean {
+        const points = action.clicks!;
+        const trackIndex = action.trackIndex;
         let stage = stages.get(trackIndex);
 
         if (stage && spine.state.getCurrent(trackIndex) !== stage.entry)
@@ -75,55 +102,126 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
 
         if (stage)
         {
-            if (stage.animationName !== animationName || stage.entry.timeScale !== 0)
-                return;
+            if (stage.action !== action || stage.entry.timeScale !== 0)
+                return false;
 
             const step = stage.step + 1;
-            if (step >= stage.points.length)
-                return;
+            if (step >= points.length)
+                return false;
 
             stage.step = step;
-            stage.targetTime = stage.points[step] * stage.duration;
-            stage.entry.timeScale = stage.points[step] === 0 ? -1 : 1;
-            return;
+            stage.targetTime = points[step] * stage.duration;
+            stage.entry.timeScale = points[step] === 0 ? -1 : 1;
+
+            applyActivation(action, step % 2 === 1)
+            return true;
         }
 
+        const animationName = action.animationNames[0];
+        const duration = spine.skeleton.data.findAnimation(animationName)!.duration;
         const entry = spine.state.setAnimation(trackIndex, animationName, false);
-        entry.timeScale = 1;
 
+        entry.timeScale = 1;
         stages.set(trackIndex, {
             entry,
-            animationName,
+            action,
             duration,
-            points,
             step: 0,
             targetTime: points[0] * duration
         });
 
+        applyActivation(action, false);
+
         if (!tracking)
         {
-            spine.ticker.add(updateStages, undefined, UPDATE_PRIORITY.LOW);
+            spine.ticker.add(updateStages, undefined, UPDATE_PRIORITY.NORMAL - 1);
             tracking = true;
         }
+
+        return true;
     }
 
-    for (const item of interaction.items)
+    function chooseAnimation(action: ParsedSpineTap): string | undefined {
+        if (action.orderActions)
+        {
+            const position = orderPositions.get(action.item.index) ?? 0;
+            orderPositions.set(action.item.index, (position + 1) % action.orderActions.length);
+
+            return action.orderActions[position];
+        }
+
+        if (action.randomActions)
+        {
+            const total = action.randomActions.reduce((sum, choice) => sum + choice.weight, 0);
+            let pick = Math.random() * total;
+
+            for (const choice of action.randomActions)
+            {
+                pick -= choice.weight;
+                if (pick < 0)
+                    return choice.animation;
+            }
+
+            return action.randomActions.at(-1)!.animation;
+        }
+
+        return action.animationNames[0];
+    }
+
+    function trackOf(item: SpineActionItem): number {
+        if (item.sType < 6)
+            return 1;
+
+        const override = item.content?.trackIndex;
+        return typeof override === "number" ? override : item.index;
+    }
+
+    function scheduleIdle(action: ParsedSpineTap) {
+        if (!action.changeIdle)
+            return;
+        if (idleTimer !== undefined)
+            clearTimeout(idleTimer);
+
+        const { animation, delayMs, ignoredItems } = action.changeIdle;
+
+        idleTimer = setTimeout(() => {
+            idleTimer = undefined;
+            if (destroyed)
+                return;
+
+            const ignoredTracks = new Set([action.trackIndex]);
+
+            for (const index of ignoredItems)
+            {
+                const item = interaction.items.find((candidate) => candidate.index === index);
+                if (item)
+                    ignoredTracks.add(trackOf(item));
+            }
+
+            for (const item of interaction.items)
+            {
+                const trackIndex = trackOf(item);
+                if (ignoredTracks.has(trackIndex))
+                    continue;
+
+                spine.state.clearTrack(trackIndex);
+                spine.skeleton.setToSetupPose();
+
+                stages.delete(trackIndex);
+                orderPositions.delete(item.index);
+            }
+
+            if (stages.size === 0)
+                stopTracking();
+
+            spine.state.setAnimation(0, animation, true);
+            spine.update(0);
+        }, delayMs);
+    }
+
+    for (const action of actions)
     {
-        const points = stagedTapPoints(item);
-        if (!isSimpleTap(item) && !points)
-            continue;
-
-        const animationName = item.sName;
-        const area = item.areas?.[0];
-
-        if (!animationName || !area)
-            continue;
-
-        const animation = spine.skeleton.data.findAnimation(animationName);
-        if (!animation || (points && animation.duration <= 0))
-            continue;
-
-        const [x, y, width, height, angle] = area;
+        const [x, y, width, height, angle] = action.area;
         const hitbox = new Container();
 
         hitbox.position.set(x, -y);
@@ -141,32 +239,45 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
 
         outlines.push(outline);
         hitbox.addChild(outline);
+        hitboxes.set(action.item.index, hitbox);
+
+        setActive(action.item.index, !action.initiallyHidden);
 
         hitbox.on("pointertap", () => {
             const now = performance.now();
-            if (destroyed || now < nextTapAt)
+            if (destroyed || now < nextTapAt || !hitbox.visible)
                 return;
 
-            if (!points && item.sType === 2 && spine.state.getCurrent(1))
+            if (action.item.sType === 2 && spine.state.getCurrent(1))
                 return;
 
-            nextTapAt = now + 500;
-
-            if (points)
+            if (action.clicks)
             {
-                playStaged(item, animationName, animation.duration, points);
-            }
-            else if (item.sType === 2)
-            {
-                spine.state.setEmptyAnimation(1, 0);
-                const entry = spine.state.addAnimation(1, animationName, false, 0);
-                entry.mixDuration = 0.2;
-                spine.state.addEmptyAnimation(1, 0.5, 0);
+                if (!playStaged(action))
+                    return;
             }
             else
             {
-                spine.state.setAnimation(item.index, animationName, false);
+                const animationName = chooseAnimation(action);
+                stages.delete(action.trackIndex);
+
+                if (action.item.sType === 2 && animationName)
+                {
+                    spine.state.setEmptyAnimation(1, 0);
+                    const entry = spine.state.addAnimation(1, animationName, false, 0);
+                    entry.mixDuration = 0.2;
+                    spine.state.addEmptyAnimation(1, 0.5, 0);
+                }
+                else if (animationName)
+                {
+                    spine.state.setAnimation(action.trackIndex, animationName, false);
+                }
+
+                applyActivation(action, false);
+                scheduleIdle(action);
             }
+
+            nextTapAt = now + 500;
         });
 
         layer.addChild(hitbox);
@@ -179,74 +290,14 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
         },
         destroy() {
             destroyed = true;
+
+            if (idleTimer !== undefined)
+                clearTimeout(idleTimer);
+
             stopTracking();
             stages.clear();
+            hitboxes.clear();
             outlines.length = 0;
         }
     }
-}
-
-function hasTapArea(item: SpineActionItem): boolean {
-    const area = item.areas?.[0];
-
-    return item.gesture === 0 &&
-        (item.role ?? 1) === 1 &&
-        !!item.sName &&
-        item.sName !== "in" &&
-        !!area &&
-        area.every(Number.isFinite) &&
-        area[2] > 0 &&
-        area[3] > 0;
-}
-
-function isSimpleTap(item: SpineActionItem): boolean {
-    return hasTapArea(item) &&
-        (item.sType === 2 || item.sType === 6) &&
-        item.content === undefined &&
-        (item.sType !== 6 || (Number.isInteger(item.index) && item.index > 0));
-}
-
-function stagedTapPoints(item: SpineActionItem): number[] | undefined {
-    const content = item.content;
-
-    if (
-        !hasTapArea(item) ||
-        item.sType !== 7 ||
-        !Number.isInteger(item.index) ||
-        item.index <= 1 ||
-        !content ||
-        Object.keys(content).length !== 1
-    )
-    {
-        return;
-    }
-
-    const raw = content.clicks;
-    if (!Array.isArray(raw) || raw.length === 0)
-        return;
-
-    const points: number[] = [];
-    let previous = 0;
-
-    for (const [index, value] of raw.entries())
-    {
-        if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)
-            return;
-
-        if (value === 0)
-        {
-            // A zero target means reverse to the start; it must be the final step.
-            if (index !== raw.length - 1 || index === 0)
-                return;
-        }
-        else if (value <= previous)
-        {
-            return;
-        }
-
-        points.push(value);
-        previous = value;
-    }
-
-    return points;
 }

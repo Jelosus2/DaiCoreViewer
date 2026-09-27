@@ -38,6 +38,7 @@ let observer: ResizeObserver | undefined;
 let reframe: (() => void) | undefined;
 let activeCamera: Container | undefined;
 let interactions: ReturnType<typeof createSpineInteractions> | undefined;
+let activeArtLayer: Container | undefined;
 
 watch([() => props.framing, () => props.placement], resetZoom);
 
@@ -106,11 +107,17 @@ async function setup() {
         const artLayer = new Container();
         const hotspotLayer = new Container();
 
+        activeArtLayer = artLayer;
+
         app.stage.addChild(camera);
         camera.addChild(portrait);
         portrait.addChild(artLayer, hotspotLayer);
 
         const spines = buildSpineScene(props.root, artLayer, cacheKeys);
+
+        for (const spine of spines)
+            spine.ticker = app.ticker;
+
         if (spines.length === 1 && props.interaction)
             interactions = createSpineInteractions(hotspotLayer, spines[0], props.interaction, props.showHotspots);
 
@@ -227,13 +234,16 @@ function destroyView() {
     observer?.disconnect();
     observer = undefined;
 
+    interactions?.destroy();
+    interactions = undefined;
+
+    activeArtLayer?.destroy({ children: true });
+    activeArtLayer = undefined;
+
     for (const key of cacheKeys)
         Cache.remove(key);
 
     cacheKeys.clear();
-
-    interactions?.destroy();
-    interactions = undefined;
 
     if (applicationReady && application)
     {
