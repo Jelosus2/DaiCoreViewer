@@ -1,6 +1,6 @@
 import type { SpineActionConfig, SpineActionItem } from "@/types/spine";
 
-import { parseSpineTap, type ParsedSpineTap } from "./parseSpineTap";
+import { parseSpineTap, type ParsedSpineTap, type SpineRoleTransition } from "./parseSpineTap";
 import { Spine } from "@esotericsoftware/spine-pixi-v8";
 import { Container, Graphics, Rectangle, UPDATE_PRIORITY } from "pixi.js";
 
@@ -25,9 +25,34 @@ interface StoppedAction {
     pausedFor: number;
 }
 
-export function createSpineInteractions(layer: Container, spine: Spine, interaction: SpineActionConfig, showHotspots: boolean) {
+interface SpineInteractionOptions {
+    role?: number;
+    state?: SpineInteractionState;
+    canTransition?: (transition: SpineRoleTransition) => boolean;
+    onTransition?: (transition: SpineRoleTransition, entry?: TrackEntry) => void;
+}
+
+export interface SpineInteractionState {
+    clickCounts: Map<number, number>;
+    orderPositions: Map<number, number>;
+    stageSteps: Map<number, number>;
+}
+
+export function createSpineInteractionState(): SpineInteractionState {
+    return { clickCounts: new Map(), orderPositions: new Map(), stageSteps: new Map() };
+}
+
+export function createSpineInteractions(
+    layer: Container,
+    spine: Spine,
+    interaction: SpineActionConfig,
+    showHotspots: boolean,
+    options: SpineInteractionOptions = {}
+) {
     const itemsByIndex = new Map(interaction.items.map((item) => [item.index, item]));
-    const parsed = interaction.items.map((item) => parseSpineTap(item, spine)).filter((action): action is ParsedSpineTap => action !== undefined);
+    const parsed = interaction.items.map((item) => parseSpineTap(item, spine, options.role))
+        .filter((action): action is ParsedSpineTap => action !== undefined)
+        .filter((action) => !action.changeRole || options.canTransition?.(action.changeRole) === true);
     const actionsByIndex = new Map(parsed.map((action) => [action.item.index, action]));
     let priorSize: number;
 
@@ -47,11 +72,12 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
     const outlines: Graphics[] = [];
     const stages = new Map<number, StagedTap>();
     const stoppedActions = new Map<number, StoppedAction>();
-    const orderPositions = new Map<number, number>();
-    const clickCounts = new Map<number, number>();
+    const state = options.state ?? createSpineInteractionState();
+    const { orderPositions, clickCounts, stageSteps } = state;
     const timers = new Set<ReturnType<typeof setTimeout>>();
     let tracking = false;
     let destroyed = false;
+    let enabled = true;
     let nextTapAt = 0;
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -98,6 +124,7 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
             if (spine.state.getCurrent(trackIndex) !== stage.entry)
             {
                 stages.delete(trackIndex);
+                stageSteps.delete(trackIndex);
                 continue;
             }
 
@@ -136,13 +163,11 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
 
                 applyActivation(stage.action, true);
                 stages.delete(trackIndex);
+                stageSteps.delete(trackIndex);
             }
             else
             {
-                stage.entry.trackTime = stage.targetTime;
                 stage.entry.timeScale = 0;
-
-                spine.update(0);
             }
         }
 
@@ -205,6 +230,7 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
 
             stage.action = action;
             stage.step = step;
+            stageSteps.set(trackIndex, step + 1);
             stage.targetTime = points[step] * stage.duration;
             stage.clickTimeRemaining = action.clickTime;
             stage.entry.timeScale = points[step] === 0 ? -1 : 1;
@@ -226,6 +252,7 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
             targetTime: points[0] * duration,
             clickTimeRemaining: action.clickTime
         });
+        stageSteps.set(trackIndex, 1);
 
         applyActivation(action, false);
         ensureTracking();
@@ -264,7 +291,7 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
         return spine.state.getCurrent(1) === null;
     }
 
-    function canTrigger(action: ParsedSpineTap): boolean {
+    function canTrigger(action: ParsedSpineTap, forced = false): boolean {
         if (action.conditions)
         {
             const target = itemsByIndex.get(action.conditions.itemIndex);
@@ -288,6 +315,9 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
                 return false;
             }
         }
+
+        if (forced)
+            return (action.needClicks ?? []).every((index) => (clickCounts.get(index) ?? 0) > 0);
 
         if (action.trackIndex === 1)
         {
@@ -330,6 +360,7 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
             spine.state.setEmptyAnimation(trackIndex, 0.2);
 
             stages.delete(trackIndex);
+            stageSteps.delete(trackIndex);
             stoppedActions.delete(trackIndex);
             orderPositions.delete(index);
         }
@@ -378,6 +409,7 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
                 spine.state.clearTrack(trackIndex);
 
                 stages.delete(trackIndex);
+                stageSteps.delete(trackIndex);
                 stoppedActions.delete(trackIndex);
                 orderPositions.delete(item.index);
             }
@@ -494,9 +526,9 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
         ensureTracking();
     }
 
-    function trigger(action: ParsedSpineTap, fromPointer = false): boolean {
+    function trigger(action: ParsedSpineTap, fromPointer = false, forced = false): boolean {
         const now = performance.now();
-        if (destroyed || (fromPointer && now < nextTapAt) || !canTrigger(action))
+        if (destroyed || !enabled || (fromPointer && now < nextTapAt) || !canTrigger(action, forced))
             return false;
 
         resetTracks(action);
@@ -514,6 +546,7 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
         {
             const animationName = chooseAnimation(action);
             stages.delete(action.trackIndex);
+            stageSteps.delete(action.trackIndex);
 
             let entry: TrackEntry | undefined;
 
@@ -537,7 +570,11 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
 
             applyActivation(action, false);
             scheduleIdle(action);
-            queueNext(action, entry);
+
+            if (action.changeRole)
+                options.onTransition?.(action.changeRole, entry);
+            else
+                queueNext(action, entry);
         }
 
         clickCounts.set(action.item.index, (clickCounts.get(action.item.index) ?? 0) + 1);
@@ -550,6 +587,9 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
 
     for (const action of actions)
     {
+        if (!action.area || action.area[2] <= 0 || action.area[3] <= 0)
+            continue;
+
         const [x, y, width, height, angle] = action.area;
         const hitbox = new Container();
 
@@ -580,13 +620,63 @@ export function createSpineInteractions(layer: Container, spine: Spine, interact
         layer.addChild(hitbox);
     }
 
+    for (const action of actions)
+    {
+        if (!action.clicks)
+            continue;
+
+        const trackIndex = action.trackIndex;
+        const count = stageSteps.get(trackIndex);
+
+        if (!count || stages.has(trackIndex) || count > action.clicks.length)
+            continue;
+
+        const name = action.animationNames[0];
+        const duration = spine.skeleton.data.findAnimation(name)!.duration;
+        const entry = spine.state.setAnimation(trackIndex, name, false);
+        const targetTime = action.clicks[count - 1] * duration;
+
+        entry.trackTime = targetTime;
+        entry.timeScale = 0;
+
+        stages.set(trackIndex, {
+            entry, action, duration, step: count - 1, targetTime,
+            clickTimeRemaining: action.clickTime
+        });
+
+        ensureTracking();
+    }
+
+    const eventListener: Parameters<Spine["state"]["addListener"]>[0] = {
+        event: (_entry, event) => {
+            const match = /^TriggerIndex_(\d+)$/.exec(event.data.name);
+            if (!match)
+                return;
+
+            const action = actionsByIndex.get(Number(match[1]));
+            if (action)
+                trigger(action, false, true);
+        }
+    };
+
+    spine.state.addListener(eventListener);
+
     return {
+        triggerByIndex(index: number) {
+            const action = actionsByIndex.get(index);
+            return action ? trigger(action) : false;
+        },
+        setEnabled(value: boolean) {
+            enabled = value;
+        },
         setDebugVisible(visible: boolean) {
             for (const outline of outlines)
                 outline.visible = visible;
         },
         destroy() {
             destroyed = true;
+
+            spine.state.removeListener(eventListener);
 
             if (idleTimer !== undefined)
                 clearTimeout(idleTimer);

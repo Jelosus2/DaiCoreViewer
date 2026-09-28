@@ -5,12 +5,21 @@ import { Spine } from "@esotericsoftware/spine-pixi-v8";
 const supportedKeys = new Set([
     "isHide", "activation", "changeIdle", "clicks", "orderActions", "randomActions",
     "conditions", "needIdle", "needClicks", "noClick", "trackIndex", "clickTime",
-    "reset7", "nextClick", "noFade", "guochange", "actions", "inIgnore"
+    "reset7", "nextClick", "noFade", "guochange", "actions", "inIgnore", "changerole"
 ]);
+
+export interface SpineRoleTransition {
+    target: string;
+    overlay?: string;
+    durationMs: number;
+    followUp?: number;
+    transfers?: Array<[source: number, target: number]>;
+    role: number;
+}
 
 export interface ParsedSpineTap {
     item: SpineActionItem;
-    area: SpineActionArea;
+    area?: SpineActionArea;
     trackIndex: number;
     initiallyHidden: boolean;
     animationNames: string[];
@@ -29,19 +38,17 @@ export interface ParsedSpineTap {
     noFade: boolean;
     guochange: boolean;
     actions?: { stopPerc: number; stopTime: number; stopLimit: number; stopCount: number; };
+    changeRole?: SpineRoleTransition;
 }
 
-export function parseSpineTap(item: SpineActionItem, spine: Spine): ParsedSpineTap | undefined {
+export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): ParsedSpineTap | undefined {
     const area = item.areas?.[0];
 
     if (
         (item.gesture ?? 0) !== 0 ||
-        (item.role ?? 1) !== 1 ||
+        (item.role ?? 1) !== role ||
         item.sName === "in" ||
-        !area ||
-        !area.every(Number.isFinite) ||
-        area[2] <= 0 ||
-        area[3] <= 0 ||
+        (area && (!area.every(Number.isFinite) || area[2] < 0 || area[3] < 0)) ||
         ![2, 3, 6, 7].includes(item.sType)
     )
     {
@@ -265,6 +272,58 @@ export function parseSpineTap(item: SpineActionItem, spine: Spine): ParsedSpineT
         };
     }
 
+    let changeRole: SpineRoleTransition | undefined;
+    if ("changerole" in content)
+    {
+        const raw = content.changerole;
+
+        if (
+            !Array.isArray(raw) || raw.length < 3 || raw.length > 6 ||
+            typeof raw[0] !== "string" || !raw[0] ||
+            typeof raw[1] !== "string" ||
+            typeof raw[2] !== "number" || !Number.isFinite(raw[2]) || raw[2] < 0
+        )
+        {
+            return;
+        }
+
+        const followUp = raw[3] === undefined || raw[3] === "" ? undefined : positiveIndex(raw[3]);
+        if (raw.length > 3 && raw[3] !== "" && followUp === undefined)
+            return;
+
+        let transfers: SpineRoleTransition["transfers"];
+        if (raw[4] !== undefined && raw[4] !== "")
+        {
+            if (typeof raw[4] !== "string")
+                return;
+
+            const parts = raw[4].split("_").map(positiveIndex);
+            if (parts.length % 2 !== 0 || parts.some((value) => value === undefined))
+                return;
+
+            transfers = [];
+
+            for (let index = 0; index < parts.length; index += 2)
+                transfers.push([parts[index]!, parts[index + 1]!]);
+        }
+
+        const nextRole = raw[5] === undefined || raw[5] === ""
+            ? 3 - (item.role ?? 1)
+            : positiveIndex(raw[5]);
+
+        if (nextRole === undefined)
+            return;
+
+        changeRole = {
+            target: raw[0],
+            overlay: raw[1] || undefined,
+            durationMs: raw[2],
+            followUp,
+            transfers,
+            role: nextRole
+        };
+    }
+
     if (
         (orderActions && randomActions) ||
         (clicks && (orderActions || randomActions || changeIdle || actions || nextClick)) ||
@@ -278,7 +337,7 @@ export function parseSpineTap(item: SpineActionItem, spine: Spine): ParsedSpineT
 
     if (actions && animationNames.length !== 1)
         return;
-    if (animationNames.length === 0 && !activation && !changeIdle && !nextClick && !reset7)
+    if (animationNames.length === 0 && !activation && !changeIdle && !nextClick && !reset7 && !changeRole)
         return;
     if (animationNames.some((name) => !spine.skeleton.data.findAnimation(name)))
         return;
@@ -288,7 +347,7 @@ export function parseSpineTap(item: SpineActionItem, spine: Spine): ParsedSpineT
     return {
         item, area, trackIndex, initiallyHidden: "isHide" in content, animationNames,
         clicks, activation, changeIdle, orderActions, randomActions, conditions,
-        needIdle, needClicks, noClick, clickTime, reset7, nextClick, noFade, guochange, actions
+        needIdle, needClicks, noClick, clickTime, reset7, nextClick, noFade, guochange, actions, changeRole
     };
 }
 

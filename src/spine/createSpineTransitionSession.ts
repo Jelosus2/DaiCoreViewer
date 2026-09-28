@@ -1,0 +1,296 @@
+import type { SpineActionConfig, SpineActionItem, SpineActionTarget, SpineRender, SpineRoot } from "@/types/spine";
+import type { SpineRoleTransition } from "./parseSpineTap";
+
+import { buildSpineScene } from "./buildSpineScene";
+import { createSpineInteractions, createSpineInteractionState } from "./createSpineInteractions";
+import { Spine } from "@esotericsoftware/spine-pixi-v8";
+import { Container, Ticker } from "pixi.js";
+
+type TrackEntry = ReturnType<Spine["state"]["setAnimation"]>;
+
+interface TransitionSessionOptions {
+    initialRender: SpineRender;
+    interaction?: SpineActionConfig;
+    targets: SpineActionTarget[];
+    artLayer: Container;
+    overlayLayer: Container;
+    hotspotLayer: Container;
+    ticker: Ticker;
+    cacheKeys: Set<string>;
+    showHotspots: boolean;
+    loadRoot: (root: SpineRoot) => Promise<void>;
+    onSceneChanged: () => void;
+    onError: (error: unknown) => void;
+}
+
+export function createSpineTransitionSession(options: TransitionSessionOptions) {
+    const roots = new Map<string, SpineRoot>();
+    const rootLoads = new Map<string, Promise<void>>();
+
+    if (options.initialRender.root)
+    {
+        roots.set(options.initialRender.l2dName, options.initialRender.root);
+        rootLoads.set(options.initialRender.l2dName, Promise.resolve());
+    }
+
+    for (const target of options.targets)
+    {
+        if (target.render.status === "ready" && target.render.root && target.render.layerCount === 1)
+            roots.set(target.l2dName, target.render.root);
+    }
+
+    const state = createSpineInteractionState();
+    const itemsByIndex = new Map(options.interaction?.items.map((item) => [item.index, item]));
+    const waits = new Set<{ id: ReturnType<typeof setTimeout>; resolve: () => void; }>();
+    const entryWaits = new Set<() => void>();
+    let interactions: ReturnType<typeof createSpineInteractions> | undefined;
+    let currentRole = 1;
+    let pending = false;
+    let destroyed = false;
+    let generation = 0;
+
+    function wait(ms: number): Promise<void> {
+        if (destroyed || ms <= 0)
+            return Promise.resolve();
+
+        return new Promise((resolve) => {
+            const timer = { id: undefined as unknown as ReturnType<typeof setTimeout>, resolve };
+
+            timer.id = setTimeout(() => {
+                waits.delete(timer);
+                resolve();
+            }, ms);
+
+            waits.add(timer);
+        });
+    }
+
+    function clearWaits() {
+        for (const timer of waits)
+        {
+            clearTimeout(timer.id);
+            timer.resolve();
+        }
+
+        waits.clear();
+    }
+
+    function clearLayer(layer: Container) {
+        for (const child of layer.removeChildren())
+            child.destroy({ children: true });
+    }
+
+    function canTransition(rule: SpineRoleTransition): boolean {
+        return roots.has(rule.target) && (!rule.overlay || roots.has(rule.overlay));
+    }
+
+    function ensureRootLoaded(name: string): Promise<void> {
+        const existing = rootLoads.get(name);
+        if (existing)
+            return existing;
+
+        const root = roots.get(name);
+        if (!root)
+            return Promise.reject(new Error(`Spine transition target ${name} is missing`));
+
+        const request = options.loadRoot(root).catch((error: unknown) => {
+            rootLoads.delete(name);
+            throw error;
+        });
+
+        rootLoads.set(name, request);
+        return request;
+    }
+
+    function mount(root: SpineRoot, role: number) {
+        interactions?.destroy();
+        interactions = undefined;
+
+        clearLayer(options.hotspotLayer);
+        clearLayer(options.artLayer);
+
+        const spines = buildSpineScene(root, options.artLayer, options.cacheKeys);
+
+        for (const spine of spines)
+            spine.ticker = options.ticker;
+
+        currentRole = role;
+
+        if (spines.length === 1 && options.interaction)
+        {
+            interactions = createSpineInteractions(options.hotspotLayer, spines[0], options.interaction, options.showHotspots, {
+                role,
+                state,
+                canTransition,
+                onTransition: beginTransition
+            });
+        }
+
+        options.onSceneChanged();
+    }
+
+    function trackOf(item: SpineActionItem): number {
+        if (item.sType < 6)
+            return 1;
+
+        const value = item.content?.trackIndex;
+        const index = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+
+        return Number.isInteger(index) && index > 0 ? index : item.index;
+    }
+
+    function carryRecords(rule: SpineRoleTransition) {
+        if (!rule.transfers)
+        {
+            state.stageSteps.clear();
+            state.orderPositions.clear();
+            return;
+        }
+
+        const previous = new Map(state.stageSteps);
+
+        for (const [sourceIndex, targetIndex] of rule.transfers)
+        {
+            const source = itemsByIndex.get(sourceIndex);
+            const target = itemsByIndex.get(targetIndex);
+
+            if (!source || !target)
+                continue;
+
+            const step = previous.get(trackOf(source));
+
+            if (step === undefined)
+                state.stageSteps.delete(trackOf(target));
+            else
+                state.stageSteps.set(trackOf(target), step);
+        }
+    }
+
+    function waitForEntry(entry: TrackEntry): Promise<void> {
+        return new Promise((resolve) => {
+            const previous = entry.listener;
+            let settled = false;
+
+            const finish = () => {
+                if (settled)
+                    return;
+
+                settled = true;
+                entryWaits.delete(finish);
+
+                resolve();
+            };
+
+            entryWaits.add(finish);
+
+            entry.listener = {
+                ...previous,
+                complete: (completed) => {
+                    previous?.complete?.(completed);
+                    finish();
+                }
+            };
+        });
+    }
+
+    function failTransition(error: unknown, token: number) {
+        if (destroyed || token !== generation)
+            return;
+
+        generation++;
+        pending = false;
+
+        clearLayer(options.overlayLayer);
+        interactions?.setEnabled(true);
+        options.onError(error);
+    }
+
+    function beginTransition(rule: SpineRoleTransition, entry?: TrackEntry) {
+        if (pending || destroyed || !canTransition(rule))
+            return;
+
+        pending = true;
+        interactions?.setEnabled(false);
+
+        const token = ++generation;
+        const endAt = performance.now() + rule.durationMs;
+        const completion = entry ? waitForEntry(entry) : wait(rule.durationMs / 2);
+
+        if (rule.overlay)
+        {
+            const overlayRoot = roots.get(rule.overlay)!;
+            void ensureRootLoaded(rule.overlay).then(() => {
+                if (destroyed || token !== generation || performance.now() >= endAt)
+                    return;
+
+                clearLayer(options.overlayLayer);
+
+                const spines = buildSpineScene(overlayRoot, options.overlayLayer, options.cacheKeys);
+
+                for (const spine of spines)
+                    spine.ticker = options.ticker;
+            }).catch((error: unknown) => {
+                failTransition(error, token);
+            });
+        }
+
+        void Promise.all([ensureRootLoaded(rule.target), completion]).then(async () => {
+            if (destroyed || token !== generation)
+                return;
+
+            carryRecords(rule);
+            mount(roots.get(rule.target)!, rule.role);
+
+            if (rule.followUp)
+                interactions?.triggerByIndex(rule.followUp);
+
+            if (rule.overlay)
+            {
+                interactions?.setEnabled(false);
+                await wait(endAt - performance.now());
+            }
+
+            if (destroyed || token !== generation)
+                return;
+
+            clearLayer(options.overlayLayer);
+            interactions?.setEnabled(true);
+
+            pending = false;
+        }).catch((error: unknown) => {
+            failTransition(error, token);
+        });
+    }
+
+    return {
+        async preloadTransitions() {
+            await Promise.all([...roots.keys()].map(ensureRootLoaded));
+        },
+        mountInitial() {
+            if (!options.initialRender.root)
+                throw new Error("Initial Spine root is missing");
+
+            mount(options.initialRender.root, currentRole);
+        },
+        setDebugVisible(visible: boolean) {
+            options.showHotspots = visible;
+            interactions?.setDebugVisible(visible);
+        },
+        destroy() {
+            destroyed = true;
+            generation++;
+            clearWaits();
+
+            for (const finish of entryWaits)
+                finish();
+
+            entryWaits.clear();
+            interactions?.destroy();
+            interactions = undefined;
+
+            clearLayer(options.hotspotLayer);
+            clearLayer(options.overlayLayer);
+            clearLayer(options.artLayer);
+        }
+    };
+}

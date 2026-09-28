@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import type { SpineRoot, SpinePlacement, SpineFraming, SpineActionConfig } from "@/types/spine";
+import type { SpineRoot, SpinePlacement, SpineFraming, SpineActionConfig, SpineActionTarget, SpineRender } from "@/types/spine";
 
-import { buildSpineScene } from "@/spine/buildSpineScene";
-import { createSpineInteractions } from "@/spine/createSpineInteractions";
+import { createSpineTransitionSession } from "@/spine/createSpineTransitionSession";
 import { Application, Assets, Cache, Container } from "pixi.js";
 import { onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 
 const props = defineProps<{
     root: SpineRoot;
+    render: SpineRender;
     placement?: SpinePlacement;
     framing: SpineFraming;
     interaction?: SpineActionConfig;
+    transitionTargets?: SpineActionTarget[];
     showHotspots: boolean;
 }>();
 
@@ -19,47 +20,63 @@ const loading = ref(true);
 const errorMessage = ref("");
 const zoom = ref(1);
 
-const assetUrls = [...new Set(props.root.nodes.flatMap((node) =>
-    node.spines.flatMap((spine) => [spine.json, spine.atlas])
-))];
-
-const pageUrls = [...new Set(props.root.nodes.flatMap((node) =>
-    node.spines.flatMap((spine) => spine.pages)
-))];
-
 const cacheKeys = new Set<string>();
+const loadedAssets = new Set<string>();
+const loadedPages = new Set<string>();
+const pendingLoads = new Set<Promise<void>>();
 const viewOffset = { x: 0, y: 0 };
 
 let disposed = false;
 let application: Application | undefined;
 let applicationReady = false;
-let assetsReady = false;
 let observer: ResizeObserver | undefined;
 let reframe: (() => void) | undefined;
 let activeCamera: Container | undefined;
-let interactions: ReturnType<typeof createSpineInteractions> | undefined;
+let session: ReturnType<typeof createSpineTransitionSession> | undefined;
 let activeArtLayer: Container | undefined;
 
 watch([() => props.framing, () => props.placement], resetZoom);
 
 watch(() => props.showHotspots, (show) => {
-    interactions?.setDebugVisible(show);
+    session?.setDebugVisible(show);
 });
 
-async function releaseAssets() {
-    if (!assetsReady)
-        return;
+async function loadRoot(root: SpineRoot) {
+    const urls = [...new Set(root.nodes.flatMap((node) => node.spines.flatMap((spine) => [spine.json, spine.atlas])))];
+    const pages = [...new Set(root.nodes.flatMap((node) => node.spines.flatMap((spine) => spine.pages) ))];
+    const request = Assets.load(urls).then(() => {
+        for (const url of urls)
+            loadedAssets.add(url);
 
-    assetsReady = false;
+        for (const url of pages)
+            loadedPages.add(url);
+    });
+
+    pendingLoads.add(request);
 
     try
     {
-        await Assets.unload(assetUrls);
+        await request;
     }
     finally
     {
-        await Assets.loader.unload(pageUrls);
+        pendingLoads.delete(request);
     }
+}
+
+async function releaseAssets() {
+    await Promise.allSettled([...pendingLoads]);
+
+    const urls = [...loadedAssets];
+    const pages = [...loadedPages];
+
+    loadedAssets.clear();
+    loadedPages.clear();
+
+    if (urls.length > 0)
+        await Assets.unload(urls);
+    if (pages.length > 0)
+        await Assets.loader.unload(pages);
 }
 
 async function setup() {
@@ -93,8 +110,7 @@ async function setup() {
 
         element.appendChild(app.canvas);
 
-        await Assets.load(assetUrls);
-        assetsReady = true;
+        await loadRoot(props.root);
 
         if (disposed)
         {
@@ -106,20 +122,40 @@ async function setup() {
         const portrait = new Container();
         const artLayer = new Container();
         const hotspotLayer = new Container();
+        const overlayLayer = new Container();
+        overlayLayer.eventMode = "none";
 
         activeArtLayer = artLayer;
 
         app.stage.addChild(camera);
-        camera.addChild(portrait);
+        camera.addChild(portrait, overlayLayer);
         portrait.addChild(artLayer, hotspotLayer);
 
-        const spines = buildSpineScene(props.root, artLayer, cacheKeys);
+        session = createSpineTransitionSession({
+            initialRender: props.render,
+            interaction: props.interaction,
+            targets: props.transitionTargets ?? [],
+            artLayer,
+            hotspotLayer,
+            overlayLayer,
+            ticker: app.ticker,
+            cacheKeys,
+            showHotspots: props.showHotspots,
+            loadRoot,
+            onSceneChanged: () => reframe?.(),
+            onError: (error) => {
+                errorMessage.value = error instanceof Error ? error.message : String(error);
+            }
+        });
+        await session.preloadTransitions();
 
-        for (const spine of spines)
-            spine.ticker = app.ticker;
+        if (disposed)
+        {
+            await releaseAssets();
+            return;
+        }
 
-        if (spines.length === 1 && props.interaction)
-            interactions = createSpineInteractions(hotspotLayer, spines[0], props.interaction, props.showHotspots);
+        session.mountInitial();
 
         activeCamera = camera;
 
@@ -234,8 +270,8 @@ function destroyView() {
     observer?.disconnect();
     observer = undefined;
 
-    interactions?.destroy();
-    interactions = undefined;
+    session?.destroy();
+    session = undefined;
 
     activeArtLayer?.destroy({ children: true });
     activeArtLayer = undefined;

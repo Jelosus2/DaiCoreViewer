@@ -23,6 +23,18 @@ const catalog = computed(() => buildSpineCatalog(manifest.value));
 const items = computed(() => catalog.value[category.value]);
 const selectedItem = computed(() => items.value.find((item) => item.id === selectedItemId.value));
 const selectedOption = computed(() => selectedItem.value?.options.find((option) => option.id === selectedOptionId.value));
+const transitionTargets = computed(() => {
+    const option = selectedOption.value;
+    if (!option || !manifest.value?.special)
+        return [];
+
+    const table = category.value === "archives"
+        ? "cfgCfgSpineMultiImageAction.lua"
+        : "cfgCfgSpineAction.lua";
+
+    return manifest.value.special.actionTransitions.find((entry) => entry.table === table && entry.id === Number(option.id))?.targets ?? [];
+});
+
 const categoryLabel = computed(() => viewerCategories.find((item) => item.id === category.value)?.label ?? "Assets");
 
 const root = computed(() =>
@@ -173,9 +185,11 @@ onUnmounted(() => controller.abort());
                 v-if="root"
                 :key="`${category}:${selectedItemId}:${selectedOptionId}`"
                 :root="root"
+                :render="selectedOption!.render"
                 :placement="selectedOption?.placement"
                 :framing="framing"
                 :interaction="selectedOption?.interaction"
+                :transition-targets="transitionTargets"
                 :show-hotspots="showHotspots"
                 class="mt-5 h-[60vh] min-h-80 overflow-hidden rounded-xl border border-line bg-stage lg:min-h-0 lg:flex-1"
             />
