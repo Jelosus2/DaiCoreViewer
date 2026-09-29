@@ -21,6 +21,7 @@ interface TransitionSessionOptions {
     loadRoot: (root: SpineRoot) => Promise<void>;
     onSceneChanged: () => void;
     onError: (error: unknown) => void;
+    onSpineUIChange?: (open: boolean) => void;
 }
 
 export function createSpineTransitionSession(options: TransitionSessionOptions) {
@@ -48,6 +49,7 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
     let pending = false;
     let destroyed = false;
     let generation = 0;
+    let spineUIOpen = false;
 
     function wait(ms: number): Promise<void> {
         if (destroyed || ms <= 0)
@@ -103,6 +105,8 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
     }
 
     function mount(root: SpineRoot, role: number) {
+        closeSpineUI();
+
         interactions?.destroy();
         interactions = undefined;
 
@@ -122,7 +126,8 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
                 role,
                 state,
                 canTransition,
-                onTransition: beginTransition
+                onTransition: beginTransition,
+                onSpineUI: options.onSpineUIChange ? toggleSpineUI : undefined
             });
         }
 
@@ -218,6 +223,11 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
 
         if (rule.overlay)
         {
+            void wait(endAt - performance.now()).then(() => {
+                if (!destroyed && token === generation)
+                    clearLayer(options.overlayLayer);
+            });
+
             const overlayRoot = roots.get(rule.overlay)!;
             void ensureRootLoaded(rule.overlay).then(() => {
                 if (destroyed || token !== generation || performance.now() >= endAt)
@@ -262,6 +272,19 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
         });
     }
 
+    function closeSpineUI() {
+        if (!spineUIOpen)
+            return;
+
+        spineUIOpen = false;
+        options.onSpineUIChange?.(false);
+    }
+
+    function toggleSpineUI() {
+        spineUIOpen = !spineUIOpen;
+        options.onSpineUIChange?.(spineUIOpen);
+    }
+
     return {
         async preloadTransitions() {
             await Promise.all([...roots.keys()].map(ensureRootLoaded));
@@ -278,6 +301,8 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
         },
         destroy() {
             destroyed = true;
+            closeSpineUI();
+
             generation++;
             clearWaits();
 
@@ -291,6 +316,9 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
             clearLayer(options.hotspotLayer);
             clearLayer(options.overlayLayer);
             clearLayer(options.artLayer);
+        },
+        triggerByIndex(index: number) {
+            return interactions?.triggerByIndex(index, true) ?? false
         }
     };
 }

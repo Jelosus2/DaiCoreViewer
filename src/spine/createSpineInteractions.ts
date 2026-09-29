@@ -30,6 +30,7 @@ interface SpineInteractionOptions {
     state?: SpineInteractionState;
     canTransition?: (transition: SpineRoleTransition) => boolean;
     onTransition?: (transition: SpineRoleTransition, entry?: TrackEntry) => void;
+    onSpineUI?: () => void;
 }
 
 export interface SpineInteractionState {
@@ -52,6 +53,7 @@ export function createSpineInteractions(
     const itemsByIndex = new Map(interaction.items.map((item) => [item.index, item]));
     const parsed = interaction.items.map((item) => parseSpineTap(item, spine, options.role))
         .filter((action): action is ParsedSpineTap => action !== undefined)
+        .filter((action) => !action.spineUI || options.onSpineUI !== undefined)
         .filter((action) => !action.changeRole || options.canTransition?.(action.changeRole) === true);
     const actionsByIndex = new Map(parsed.map((action) => [action.item.index, action]));
     let priorSize: number;
@@ -649,6 +651,12 @@ export function createSpineInteractions(
 
     const eventListener: Parameters<Spine["state"]["addListener"]>[0] = {
         event: (_entry, event) => {
+            if (event.data.name === "SpineUI" || event.data.name.startsWith("SpineUI_"))
+            {
+                options.onSpineUI?.();
+                return;
+            }
+
             const match = /^TriggerIndex_(\d+)$/.exec(event.data.name);
             if (!match)
                 return;
@@ -662,9 +670,9 @@ export function createSpineInteractions(
     spine.state.addListener(eventListener);
 
     return {
-        triggerByIndex(index: number) {
+        triggerByIndex(index: number, forced = false) {
             const action = actionsByIndex.get(index);
-            return action ? trigger(action) : false;
+            return action ? trigger(action, false, forced) : false;
         },
         setEnabled(value: boolean) {
             enabled = value;

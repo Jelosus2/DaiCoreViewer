@@ -5,7 +5,8 @@ import { Spine } from "@esotericsoftware/spine-pixi-v8";
 const supportedKeys = new Set([
     "isHide", "activation", "changeIdle", "clicks", "orderActions", "randomActions",
     "conditions", "needIdle", "needClicks", "noClick", "trackIndex", "clickTime",
-    "reset7", "nextClick", "noFade", "guochange", "actions", "inIgnore", "changerole"
+    "reset7", "nextClick", "noFade", "guochange", "actions", "inIgnore", "changerole",
+    "isSpineUI"
 ]);
 
 export interface SpineRoleTransition {
@@ -39,6 +40,7 @@ export interface ParsedSpineTap {
     guochange: boolean;
     actions?: { stopPerc: number; stopTime: number; stopLimit: number; stopCount: number; };
     changeRole?: SpineRoleTransition;
+    spineUI: boolean;
 }
 
 export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): ParsedSpineTap | undefined {
@@ -57,6 +59,10 @@ export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): Pa
 
     const content: Record<string, SpineActionValue> = item.content ?? {};
     if (Object.keys(content).some((key) => !supportedKeys.has(key)))
+        return;
+
+    const spineUI = "isSpineUI" in content;
+    if (spineUI && !enabled(content.isSpineUI))
         return;
 
     let trackIndex = item.sType < 6 ? 1 : item.index;
@@ -347,7 +353,8 @@ export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): Pa
     return {
         item, area, trackIndex, initiallyHidden: "isHide" in content, animationNames,
         clicks, activation, changeIdle, orderActions, randomActions, conditions,
-        needIdle, needClicks, noClick, clickTime, reset7, nextClick, noFade, guochange, actions, changeRole
+        needIdle, needClicks, noClick, clickTime, reset7, nextClick, noFade, guochange, actions, changeRole,
+        spineUI
     };
 }
 

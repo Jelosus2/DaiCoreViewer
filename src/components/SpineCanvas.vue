@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import type { SpineRoot, SpinePlacement, SpineFraming, SpineActionConfig, SpineActionTarget, SpineRender } from "@/types/spine";
 
+import MachairodusMinigame from "./minigames/MachairodusMinigame.vue";
+
 import { createSpineTransitionSession } from "@/spine/createSpineTransitionSession";
-import { Application, Assets, Cache, Container } from "pixi.js";
+import { loadMachairodusAssets } from "@/minigames/machairodusAssets";
+import { targetWidth, targetHeight, type MachairodusTargetView } from "@/minigames/machairodusMotion.ts";
+import { createMachairodusSpark } from "@/minigames/machairodusEffects.ts";
+import { Application, Assets, Cache, Container, Sprite, Texture } from "pixi.js";
 import { onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import "pixi.js/prepare";
 
 const props = defineProps<{
     root: SpineRoot;
@@ -19,12 +25,17 @@ const host = useTemplateRef<HTMLDivElement>("host");
 const loading = ref(true);
 const errorMessage = ref("");
 const zoom = ref(1);
+const machairodusOpen = ref(false);
+const machairodusSprites = ref<Record<string, string> | null>(null);
 
 const cacheKeys = new Set<string>();
 const loadedAssets = new Set<string>();
 const loadedPages = new Set<string>();
 const pendingLoads = new Set<Promise<void>>();
 const viewOffset = { x: 0, y: 0 };
+const hasMachairodusMinigame = props.interaction?.id === 3018005 && props.render.l2dName === "30180_skin_Machairodus05a_spine";
+const targetSprites = new Map<number, Sprite>();
+const targetEffects = new Map<number, ReturnType<typeof createMachairodusSpark>>();
 
 let disposed = false;
 let application: Application | undefined;
@@ -34,6 +45,9 @@ let reframe: (() => void) | undefined;
 let activeCamera: Container | undefined;
 let session: ReturnType<typeof createSpineTransitionSession> | undefined;
 let activeArtLayer: Container | undefined;
+let activeTargetLayer: Container | undefined;
+let targetTextures: { gold: Texture; normal: Texture; } | undefined;
+let effectTextures: { streak: Texture; flare: Texture } | undefined;
 
 watch([() => props.framing, () => props.placement], resetZoom);
 
@@ -42,26 +56,18 @@ watch(() => props.showHotspots, (show) => {
 });
 
 async function loadRoot(root: SpineRoot) {
-    const urls = [...new Set(root.nodes.flatMap((node) => node.spines.flatMap((spine) => [spine.json, spine.atlas])))];
-    const pages = [...new Set(root.nodes.flatMap((node) => node.spines.flatMap((spine) => spine.pages) ))];
-    const request = Assets.load(urls).then(() => {
-        for (const url of urls)
-            loadedAssets.add(url);
+    const spines = root.nodes.flatMap((node) => node.spines);
+    const urls = [...new Set(spines.flatMap((spine) => [spine.json, spine.atlas]))];
 
-        for (const url of pages)
-            loadedPages.add(url);
-    });
-
-    pendingLoads.add(request);
-
-    try
+    for (const spine of spines)
     {
-        await request;
+        for (const page of spine.pages)
+        {
+            loadedPages.add(page);
+        }
     }
-    finally
-    {
-        pendingLoads.delete(request);
-    }
+
+    await Promise.all(urls.map((url) => loadTrackedAsset(url)));
 }
 
 async function releaseAssets() {
@@ -73,10 +79,14 @@ async function releaseAssets() {
     loadedAssets.clear();
     loadedPages.clear();
 
-    if (urls.length > 0)
-        await Assets.unload(urls);
-    if (pages.length > 0)
-        await Assets.loader.unload(pages);
+    const assets = await Promise.allSettled(urls.map((url) => Assets.unload(url)));
+    const pageAssets = await Promise.allSettled(pages.map((page) => Assets.loader.unload(page)));
+
+    for (const result of [...assets, ...pageAssets])
+    {
+        if (result.status === "rejected")
+            console.error("Failed to unload a Spine asset:", result.reason);
+    }
 }
 
 async function setup() {
@@ -112,6 +122,45 @@ async function setup() {
 
         await loadRoot(props.root);
 
+        let backgroundTextures: Texture[] = [];
+
+        if (hasMachairodusMinigame && !disposed)
+        {
+            const ui = await loadMachairodusAssets();
+
+            if (disposed)
+                return;
+
+            machairodusSprites.value = ui.sprites;
+
+            const urls = [...ui.backgrounds, ui.sprites.img_04_01, ui.sprites.img_04_02, ...ui.effects];
+            const [background1, background2, gold, normal, streak, flare] = await Promise.all(urls.map((url) => loadTrackedAsset<Texture>(url)));
+
+            if (disposed)
+            {
+                await releaseAssets();
+                return;
+            }
+
+            backgroundTextures = [background1, background2];
+            targetTextures = { gold, normal };
+            effectTextures = { streak, flare };
+
+            for (const url of urls)
+                loadedAssets.add(url);
+        }
+
+        if (targetTextures && effectTextures)
+        {
+            await app.renderer.prepare?.upload([
+                ...backgroundTextures,
+                targetTextures.gold,
+                targetTextures.normal,
+                effectTextures.streak,
+                effectTextures.flare
+            ]);
+        }
+
         if (disposed)
         {
             await releaseAssets();
@@ -119,6 +168,28 @@ async function setup() {
         }
 
         const camera = new Container();
+        const backgroundLayer = new Container();
+        backgroundLayer.visible = false;
+
+        const backgrounds = backgroundTextures.map((texture) => {
+            const background = Sprite.from(texture);
+            background.anchor.set(0.5);
+            background.width = 2590;
+            background.height = 1080;
+
+            return background;
+        });
+
+        if (backgrounds[0])
+            backgroundLayer.addChild(backgrounds[0]);
+
+        const targetLayer = new Container();
+        backgroundLayer.addChild(targetLayer);
+        activeTargetLayer = targetLayer;
+
+        if (backgrounds[1])
+            backgroundLayer.addChild(backgrounds[1]);
+
         const portrait = new Container();
         const artLayer = new Container();
         const hotspotLayer = new Container();
@@ -128,7 +199,7 @@ async function setup() {
         activeArtLayer = artLayer;
 
         app.stage.addChild(camera);
-        camera.addChild(portrait, overlayLayer);
+        camera.addChild(backgroundLayer, portrait, overlayLayer);
         portrait.addChild(artLayer, hotspotLayer);
 
         session = createSpineTransitionSession({
@@ -145,7 +216,18 @@ async function setup() {
             onSceneChanged: () => reframe?.(),
             onError: (error) => {
                 errorMessage.value = error instanceof Error ? error.message : String(error);
-            }
+            },
+            onSpineUIChange: hasMachairodusMinigame
+                ? (open) => {
+                    machairodusOpen.value = open;
+                    backgroundLayer.visible = open;
+
+                    if (open)
+                        resetZoom();
+                    else
+                        reframe?.();
+                }
+                : undefined
         });
         await session.preloadTransitions();
 
@@ -183,6 +265,20 @@ async function setup() {
         destroyView();
         await releaseAssets();
     }
+}
+
+function loadTrackedAsset<T>(url: string): Promise<T> {
+    const request = Assets.load<T>(url).then((asset) => {
+        loadedAssets.add(url);
+        return asset;
+    });
+
+    const settled: Promise<void> = request.then(() => {}, () => {});
+
+    pendingLoads.add(settled);
+    void settled.then(() => pendingLoads.delete(settled));
+
+    return request;
 }
 
 function resetZoom() {
@@ -264,7 +360,92 @@ function frame(
     );
 }
 
+function playMinigameAction(index: number): boolean {
+    return session?.triggerByIndex(index) ?? false;
+}
+
+function updateMachairodusTargets(targets: MachairodusTargetView[]) {
+    const layer = activeTargetLayer;
+    const textures = targetTextures;
+    const effects = effectTextures;
+
+    if (!layer || !textures || !effects)
+        return;
+
+    const ids = new Set<number>();
+
+    for (const target of targets)
+    {
+        ids.add(target.id);
+        let sprite = targetSprites.get(target.id);
+
+        if (!sprite)
+        {
+            sprite = Sprite.from(target.gold ? textures.gold : textures.normal);
+            sprite.anchor.set(0.5, 1);
+            sprite.width = targetWidth;
+            sprite.height = targetHeight;
+
+            layer.addChild(sprite);
+            targetSprites.set(target.id, sprite);
+        }
+
+        const fold = Math.max(0, Math.cos(target.tilt * Math.PI / 180));
+        const direction = target.upper ? -1 : 1;
+
+        sprite.position.set(target.x, target.y + direction * targetHeight / 2);
+        sprite.scale.set(
+            direction * targetWidth / sprite.texture.width,
+            direction * fold * targetHeight / sprite.texture.height
+        );
+
+        if (target.exitAge !== null)
+        {
+            let spark = targetEffects.get(target.id);
+
+            if (!spark)
+            {
+                spark = createMachairodusSpark(effects.streak, effects.flare);
+
+                targetEffects.set(target.id, spark);
+                layer.addChild(spark.view);
+            }
+
+            spark.view.position.set(target.x + direction * 15.2 * 1.024, target.y - direction * 6.4 * 1.024);
+            spark.view.scale.set(direction * 1.024, direction * 1.024);
+            spark.update(target.exitAge);
+        }
+    }
+
+    for (const [id, sprite] of targetSprites)
+    {
+        if (ids.has(id))
+            continue;
+
+        layer.removeChild(sprite);
+        sprite.destroy();
+
+        const spark = targetEffects.get(id);
+        if (spark)
+        {
+            spark.view.destroy({ children: true });
+            targetEffects.delete(id);
+        }
+
+        targetSprites.delete(id);
+    }
+}
+
 function destroyView() {
+    machairodusOpen.value = false;
+    machairodusSprites.value = null;
+
+    activeTargetLayer = undefined;
+    targetTextures = undefined;
+    effectTextures = undefined;
+    targetSprites.clear();
+    targetEffects.clear();
+
     reframe = undefined;
 
     observer?.disconnect();
@@ -357,5 +538,13 @@ onUnmounted(() => {
         >
             {{ errorMessage }}
         </p>
+
+        <MachairodusMinigame
+            v-if="machairodusSprites"
+            :active="machairodusOpen && !loading"
+            :sprites="machairodusSprites"
+            :play-action="playMinigameAction"
+            :targets-changed="updateMachairodusTargets"
+        />
     </div>
 </template>
