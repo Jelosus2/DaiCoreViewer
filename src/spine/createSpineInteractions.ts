@@ -1,6 +1,7 @@
 import type { SpineActionConfig, SpineActionItem } from "@/types/spine";
 
 import { parseSpineTap, type ParsedSpineTap, type SpineRoleTransition } from "./parseSpineTap";
+import { attachSpineGesture } from "./attachSpineGesture";
 import { Spine } from "@esotericsoftware/spine-pixi-v8";
 import { Container, Graphics, Rectangle, UPDATE_PRIORITY } from "pixi.js";
 
@@ -77,11 +78,14 @@ export function createSpineInteractions(
     const state = options.state ?? createSpineInteractionState();
     const { orderPositions, clickCounts, stageSteps } = state;
     const timers = new Set<ReturnType<typeof setTimeout>>();
+    const disposeGestures: Array<() => void> = [];
+    const recoveringGestureTracks = new Set<number>();
     let tracking = false;
     let destroyed = false;
     let enabled = true;
     let nextTapAt = 0;
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    let gestureActive = false;
 
     function stopTracking() {
         if (!tracking)
@@ -180,6 +184,9 @@ export function createSpineInteractions(
                 stoppedActions.delete(trackIndex);
                 continue;
             }
+
+            if (stopped.entry.alpha < 1)
+                stopped.entry.alpha = Math.min(1, stopped.entry.alpha + deltaSeconds / 0.2);
 
             if (stopped.pendingStop && stopped.entry.trackTime >= stopped.stopAt)
             {
@@ -509,8 +516,9 @@ export function createSpineInteractions(
             return;
 
         const entry = spine.state.setAnimation(1, name, false);
-
+        entry.alpha = 0;
         entry.mixDuration = 0.2;
+
         spine.state.addEmptyAnimation(1, 0.5, 0);
 
         const duration = spine.skeleton.data.findAnimation(name)!.duration;
@@ -529,6 +537,9 @@ export function createSpineInteractions(
     }
 
     function trigger(action: ParsedSpineTap, fromPointer = false, forced = false): boolean {
+        if (action.gesture)
+            return false;
+
         const now = performance.now();
         if (destroyed || !enabled || (fromPointer && now < nextTapAt) || !canTrigger(action, forced))
             return false;
@@ -599,7 +610,7 @@ export function createSpineInteractions(
         hitbox.rotation = -angle * Math.PI / 180;
         hitbox.hitArea = new Rectangle(-width / 2, -height / 2, width, height);
         hitbox.eventMode = "static";
-        hitbox.cursor = "pointer";
+        hitbox.cursor = action.gesture ? "grab" : "pointer";
 
         const outline = new Graphics()
             .rect(-width / 2, -height / 2, width, height)
@@ -614,10 +625,33 @@ export function createSpineInteractions(
 
         setActive(action.item.index, !action.initiallyHidden);
 
-        hitbox.on("pointertap", () => {
-            if (hitbox.visible)
-                trigger(action, true);
-        });
+        if (action.gesture)
+        {
+            disposeGestures.push(attachSpineGesture(
+                hitbox,
+                spine,
+                action,
+                () => enabled && !destroyed && !gestureActive && hitbox.visible && isIdle() && !recoveringGestureTracks.has(action.trackIndex),
+                () => {
+                    gestureActive = true;
+                    clickCounts.set(action.item.index, (clickCounts.get(action.item.index) ?? 0) + 1);
+                },
+                () => { gestureActive = false; },
+                (recovering) => {
+                    if (recovering)
+                        recoveringGestureTracks.add(action.trackIndex);
+                    else
+                        recoveringGestureTracks.delete(action.trackIndex);
+                }
+            ));
+        }
+        else
+        {
+            hitbox.on("pointertap", () => {
+                if (hitbox.visible)
+                    trigger(action, true);
+            });
+        }
 
         layer.addChild(hitbox);
     }
@@ -686,6 +720,9 @@ export function createSpineInteractions(
 
             spine.state.removeListener(eventListener);
 
+            for (const dispose of disposeGestures)
+                dispose();
+
             if (idleTimer !== undefined)
                 clearTimeout(idleTimer);
 
@@ -699,7 +736,9 @@ export function createSpineInteractions(
             stages.clear();
             stoppedActions.clear();
             hitboxes.clear();
+            recoveringGestureTracks.clear();
             outlines.length = 0;
+            disposeGestures.length = 0;
         }
     }
 }

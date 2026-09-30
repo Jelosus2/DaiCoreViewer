@@ -6,7 +6,7 @@ const supportedKeys = new Set([
     "isHide", "activation", "changeIdle", "clicks", "orderActions", "randomActions",
     "conditions", "needIdle", "needClicks", "noClick", "trackIndex", "clickTime",
     "reset7", "nextClick", "noFade", "guochange", "actions", "inIgnore", "changerole",
-    "isSpineUI"
+    "isSpineUI", "gestureDatas"
 ]);
 
 export interface SpineRoleTransition {
@@ -41,17 +41,27 @@ export interface ParsedSpineTap {
     actions?: { stopPerc: number; stopTime: number; stopLimit: number; stopCount: number; };
     changeRole?: SpineRoleTransition;
     spineUI: boolean;
+    gesture?: {
+        direction: 1 | 2 | 3 | 4;
+        speed: number;
+        limit: number;
+        split: number;
+        stopTime?: number;
+    };
 }
 
 export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): ParsedSpineTap | undefined {
     const area = item.areas?.[0];
+    const gestureValue = item.gesture ?? 0;
+    const isGesture = gestureValue >= 1 && gestureValue <= 4;
 
     if (
-        (item.gesture ?? 0) !== 0 ||
+        (gestureValue !== 0 && !isGesture) ||
         (item.role ?? 1) !== role ||
         item.sName === "in" ||
         (area && (!area.every(Number.isFinite) || area[2] < 0 || area[3] < 0)) ||
-        ![2, 3, 6, 7].includes(item.sType)
+        (!isGesture && ![2, 3, 6, 7].includes(item.sType)) ||
+        (isGesture && ![4, 7, 9].includes(item.sType))
     )
     {
         return;
@@ -60,6 +70,40 @@ export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): Pa
     const content: Record<string, SpineActionValue> = item.content ?? {};
     if (Object.keys(content).some((key) => !supportedKeys.has(key)))
         return;
+
+    if (isGesture && Object.keys(content).some((key) => key !== "gestureDatas" && key !== "isHide"))
+        return;
+
+    let gesture: ParsedSpineTap["gesture"];
+    if (isGesture)
+    {
+        const raw = content.gestureDatas;
+        if (!raw || typeof raw !== "object" || Array.isArray(raw))
+            return;
+
+        const speed = raw.speed;
+        const limit = raw.limitPerc ?? 1;
+        const split = raw.splitPerc ?? 1;
+        const stopTime = raw.stopTime;
+
+        if (
+            typeof speed !== "number" || !Number.isFinite(speed) || speed <= 0 ||
+            typeof limit !== "number" || !Number.isFinite(limit) || limit <= 0 || limit > 1 ||
+            typeof split !== "number" || !Number.isFinite(split) || split < 0 || split > 1 ||
+            (stopTime !== undefined && (typeof stopTime !== "number" || !Number.isFinite(stopTime) || stopTime < 0))
+        )
+        {
+            return;
+        }
+
+        gesture = {
+            direction: gestureValue as 1 | 2 | 3 | 4,
+            speed,
+            limit,
+            split,
+            stopTime: typeof stopTime === "number" ? stopTime : undefined
+        };
+    }
 
     const spineUI = "isSpineUI" in content;
     if (spineUI && !enabled(content.isSpineUI))
@@ -349,12 +393,14 @@ export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): Pa
         return;
     if (clicks && (animationNames.length !== 1 || (spine.skeleton.data.findAnimation(animationNames[0])?.duration ?? 0) <= 0))
         return;
+    if (gesture && (animationNames.length !== 1 || (spine.skeleton.data.findAnimation(animationNames[0])?.duration ?? 0) <= 0))
+        return;
 
     return {
         item, area, trackIndex, initiallyHidden: "isHide" in content, animationNames,
         clicks, activation, changeIdle, orderActions, randomActions, conditions,
         needIdle, needClicks, noClick, clickTime, reset7, nextClick, noFade, guochange, actions, changeRole,
-        spineUI
+        spineUI, gesture
     };
 }
 

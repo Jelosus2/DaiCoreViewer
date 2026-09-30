@@ -1,6 +1,6 @@
 import type { SpineActionConfig, SpineActionItem, SpineActionTarget, SpineRender, SpineRoot } from "@/types/spine";
-import type { SpineRoleTransition } from "./parseSpineTap";
 
+import { parseSpineTap, type SpineRoleTransition } from "./parseSpineTap";
 import { buildSpineScene } from "./buildSpineScene";
 import { createSpineInteractions, createSpineInteractionState } from "./createSpineInteractions";
 import { Spine } from "@esotericsoftware/spine-pixi-v8";
@@ -120,9 +120,16 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
 
         currentRole = role;
 
-        if (spines.length === 1 && options.interaction)
+        const config = options.interaction;
+        const candidates = config && spines.length > 1
+            ? spines.filter((candidate) => config.items.some((item) =>
+                (parseSpineTap(item, candidate, role)?.animationNames.length ?? 0) > 0
+            ))
+            : spines;
+
+        if (config && candidates.length === 1)
         {
-            interactions = createSpineInteractions(options.hotspotLayer, spines[0], options.interaction, options.showHotspots, {
+            interactions = createSpineInteractions(options.hotspotLayer, candidates[0], config, options.showHotspots, {
                 role,
                 state,
                 canTransition,
