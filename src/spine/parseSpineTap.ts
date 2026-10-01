@@ -6,7 +6,7 @@ const supportedKeys = new Set([
     "isHide", "activation", "changeIdle", "clicks", "orderActions", "randomActions",
     "conditions", "needIdle", "needClicks", "noClick", "trackIndex", "clickTime",
     "reset7", "nextClick", "noFade", "guochange", "actions", "inIgnore", "changerole",
-    "isSpineUI", "gestureDatas"
+    "isSpineUI", "gestureDatas", "drag"
 ]);
 
 export interface SpineRoleTransition {
@@ -48,19 +48,27 @@ export interface ParsedSpineTap {
         split: number;
         stopTime?: number;
     };
+    drag?: {
+        gesture: 5 | 6;
+        targetObjName: string;
+        slots: string[];
+        targets: Array<{ object: string; animation: string }>;
+        hideSpine?: string;
+    };
 }
 
 export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): ParsedSpineTap | undefined {
     const area = item.areas?.[0];
     const gestureValue = item.gesture ?? 0;
     const isGesture = gestureValue >= 1 && gestureValue <= 4;
+    const isObjectDrag = item.sType === 5 && (gestureValue === 5 || gestureValue === 6);
 
     if (
-        (gestureValue !== 0 && !isGesture) ||
+        (gestureValue !== 0 && !isGesture && !isObjectDrag) ||
         (item.role ?? 1) !== role ||
         item.sName === "in" ||
         (area && (!area.every(Number.isFinite) || area[2] < 0 || area[3] < 0)) ||
-        (!isGesture && ![2, 3, 6, 7].includes(item.sType)) ||
+        (!isGesture && !isObjectDrag && ![2, 3, 6, 7].includes(item.sType)) ||
         (isGesture && ![4, 7, 9].includes(item.sType))
     )
     {
@@ -102,6 +110,62 @@ export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): Pa
             limit,
             split,
             stopTime: typeof stopTime === "number" ? stopTime : undefined
+        };
+    }
+
+    if (isObjectDrag && Object.keys(content).some((key) => key !== "drag" && key !== "isHide"))
+        return;
+
+    let drag: ParsedSpineTap["drag"];
+    if (isObjectDrag)
+    {
+        const raw = content.drag;
+        if (!raw || typeof raw !== "object" || Array.isArray(raw))
+            return;
+
+        if (Object.keys(raw).some((key) => !["targetObjName", "targetPosObjName", "targetPosObjNames", "slots", "hideSpine"].includes(key)))
+            return;
+
+        const targetObjName = raw.targetObjName;
+        const slots = raw.slots ?? [];
+        const names = raw.targetPosObjNames ?? [];
+        const hideSpine = raw.hideSpine;
+
+        if (
+            typeof targetObjName !== "string" || !targetObjName ||
+            !Array.isArray(slots) ||
+            !slots.every((value): value is string => typeof value === "string" && !!value) ||
+            !Array.isArray(names) ||
+            !names.every((value): value is string => typeof value === "string" && !!value) ||
+            (hideSpine !== undefined && (typeof hideSpine !== "string" || !hideSpine))
+        )
+        {
+            return;
+        }
+
+        const targets: NonNullable<ParsedSpineTap["drag"]>["targets"] = [];
+
+        for (const value of names)
+        {
+            const separator = value.lastIndexOf("_");
+            if (separator <= 0 || separator === value.length - 1)
+                return;
+
+            const object = value.slice(0, separator);
+            const animation = value.slice(separator + 1);
+
+            if (!spine.skeleton.data.findAnimation(animation))
+                return;
+
+            targets.push({ object, animation });
+        }
+
+        drag = {
+            gesture: gestureValue as 5 | 6,
+            targetObjName,
+            slots,
+            targets,
+            hideSpine: typeof hideSpine === "string" ? hideSpine : undefined
         };
     }
 
@@ -387,7 +451,7 @@ export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): Pa
 
     if (actions && animationNames.length !== 1)
         return;
-    if (animationNames.length === 0 && !activation && !changeIdle && !nextClick && !reset7 && !changeRole)
+    if (animationNames.length === 0 && !activation && !changeIdle && !nextClick && !reset7 && !changeRole && !drag)
         return;
     if (animationNames.some((name) => !spine.skeleton.data.findAnimation(name)))
         return;
@@ -400,7 +464,7 @@ export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): Pa
         item, area, trackIndex, initiallyHidden: "isHide" in content, animationNames,
         clicks, activation, changeIdle, orderActions, randomActions, conditions,
         needIdle, needClicks, noClick, clickTime, reset7, nextClick, noFade, guochange, actions, changeRole,
-        spineUI, gesture
+        spineUI, gesture, drag
     };
 }
 

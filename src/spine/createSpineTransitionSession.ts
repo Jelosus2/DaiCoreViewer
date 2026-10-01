@@ -22,6 +22,7 @@ interface TransitionSessionOptions {
     onSceneChanged: () => void;
     onError: (error: unknown) => void;
     onSpineUIChange?: (open: boolean) => void;
+    getGamePortraitScale: () => number;
 }
 
 export function createSpineTransitionSession(options: TransitionSessionOptions) {
@@ -113,7 +114,8 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
         clearLayer(options.hotspotLayer);
         clearLayer(options.artLayer);
 
-        const spines = buildSpineScene(root, options.artLayer, options.cacheKeys);
+        const scene = buildSpineScene(root, options.artLayer, options.cacheKeys);
+        const spines = scene.spines;
 
         for (const spine of spines)
             spine.ticker = options.ticker;
@@ -122,9 +124,13 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
 
         const config = options.interaction;
         const candidates = config && spines.length > 1
-            ? spines.filter((candidate) => config.items.some((item) =>
-                (parseSpineTap(item, candidate, role)?.animationNames.length ?? 0) > 0
-            ))
+            ? spines.filter((candidate) =>
+                root.nodes[scene.spineNodes.get(candidate)!].activeInitially &&
+                config.items.some((item) =>
+                    (parseSpineTap(item, candidate, role)?.animationNames.length ?? 0) > 0 ||
+                    parseSpineTap(item, candidate, role)?.drag !== undefined
+                )
+            )
             : spines;
 
         if (config && candidates.length === 1)
@@ -132,6 +138,11 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
             interactions = createSpineInteractions(options.hotspotLayer, candidates[0], config, options.showHotspots, {
                 role,
                 state,
+                scene: {
+                    ...scene,
+                    root,
+                    getGamePortraitScale: options.getGamePortraitScale
+                },
                 canTransition,
                 onTransition: beginTransition,
                 onSpineUI: options.onSpineUIChange ? toggleSpineUI : undefined
@@ -242,7 +253,7 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
 
                 clearLayer(options.overlayLayer);
 
-                const spines = buildSpineScene(overlayRoot, options.overlayLayer, options.cacheKeys);
+                const { spines } = buildSpineScene(overlayRoot, options.overlayLayer, options.cacheKeys);
 
                 for (const spine of spines)
                     spine.ticker = options.ticker;

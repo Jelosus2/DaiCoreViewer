@@ -57,7 +57,8 @@ watch(() => props.showHotspots, (show) => {
 
 async function loadRoot(root: SpineRoot) {
     const spines = root.nodes.flatMap((node) => node.spines);
-    const urls = [...new Set(spines.flatMap((spine) => [spine.json, spine.atlas]))];
+    const images = root.nodes.flatMap((node) => [node.image, node.mask].filter((url): url is string => Boolean(url)));
+    const urls = [...new Set([...spines.flatMap((spine) => [spine.json, spine.atlas]), ...images])];
 
     for (const spine of spines)
     {
@@ -227,7 +228,8 @@ async function setup() {
                     else
                         reframe?.();
                 }
-                : undefined
+                : undefined,
+            getGamePortraitScale: () => props.placement?.[2] ?? 1
         });
         await session.preloadTransitions();
 

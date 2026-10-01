@@ -1,7 +1,7 @@
 import type { SpineActionConfig, SpineActionItem } from "@/types/spine";
 
 import { parseSpineTap, type ParsedSpineTap, type SpineRoleTransition } from "./parseSpineTap";
-import { attachSpineGesture } from "./attachSpineGesture";
+import { attachSpineGesture, attachSpineObjectDrag, type SpineObjectDragScene } from "./attachSpineGesture";
 import { Spine } from "@esotericsoftware/spine-pixi-v8";
 import { Container, Graphics, Rectangle, UPDATE_PRIORITY } from "pixi.js";
 
@@ -29,6 +29,7 @@ interface StoppedAction {
 interface SpineInteractionOptions {
     role?: number;
     state?: SpineInteractionState;
+    scene?: SpineObjectDragScene;
     canTransition?: (transition: SpineRoleTransition) => boolean;
     onTransition?: (transition: SpineRoleTransition, entry?: TrackEntry) => void;
     onSpineUI?: () => void;
@@ -54,6 +55,7 @@ export function createSpineInteractions(
     const itemsByIndex = new Map(interaction.items.map((item) => [item.index, item]));
     const parsed = interaction.items.map((item) => parseSpineTap(item, spine, options.role))
         .filter((action): action is ParsedSpineTap => action !== undefined)
+        .filter((action) => !action.drag || options.scene !== undefined)
         .filter((action) => !action.spineUI || options.onSpineUI !== undefined)
         .filter((action) => !action.changeRole || options.canTransition?.(action.changeRole) === true);
     const actionsByIndex = new Map(parsed.map((action) => [action.item.index, action]));
@@ -75,6 +77,7 @@ export function createSpineInteractions(
     const outlines: Graphics[] = [];
     const stages = new Map<number, StagedTap>();
     const stoppedActions = new Map<number, StoppedAction>();
+    const fadingEntries = new Map<number, TrackEntry>();
     const state = options.state ?? createSpineInteractionState();
     const { orderPositions, clickCounts, stageSteps } = state;
     const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -104,7 +107,7 @@ export function createSpineInteractions(
     }
 
     function maybeStopTracking() {
-        if (stages.size === 0 && stoppedActions.size === 0)
+        if (stages.size === 0 && stoppedActions.size === 0 && fadingEntries.size === 0)
             stopTracking();
     }
 
@@ -162,10 +165,8 @@ export function createSpineInteractions(
             if (stage.step === stage.action.clicks!.length - 1)
             {
                 stage.entry.trackTime = 0;
-
                 spine.state.clearTrack(trackIndex);
-                spine.skeleton.setToSetupPose();
-                spine.update(0);
+                spine.state.setEmptyAnimation(trackIndex, 0.5);
 
                 applyActivation(stage.action, true);
                 stages.delete(trackIndex);
@@ -204,6 +205,20 @@ export function createSpineInteractions(
                 if (stopped.pausedFor > stopped.stopTime)
                     stopped.entry.timeScale = 1;
             }
+        }
+
+        for (const [trackIndex, entry] of fadingEntries)
+        {
+            if (spine.state.getCurrent(trackIndex) !== entry)
+            {
+                fadingEntries.delete(trackIndex);
+                continue;
+            }
+
+            entry.alpha = Math.min(1, entry.alpha + deltaSeconds / 0.2);
+
+            if (entry.alpha === 1)
+                fadingEntries.delete(trackIndex);
         }
 
         maybeStopTracking();
@@ -536,13 +551,37 @@ export function createSpineInteractions(
         ensureTracking();
     }
 
-    function trigger(action: ParsedSpineTap, fromPointer = false, forced = false): boolean {
-        if (action.gesture)
+    function playDragAnimation(trackIndex: number, name: string) {
+        const entry = spine.state.setAnimation(trackIndex, name, false);
+        entry.alpha = 0;
+        entry.mixDuration = 0.2;
+
+        spine.state.addEmptyAnimation(trackIndex, 0.5, 0);
+        fadingEntries.set(trackIndex, entry);
+        ensureTracking();
+    }
+
+    function trigger(action: ParsedSpineTap, fromPointer = false, forced = false, fromObjectRestore = false): boolean {
+        if (action.gesture || (action.drag && !fromObjectRestore))
             return false;
 
         const now = performance.now();
         if (destroyed || !enabled || (fromPointer && now < nextTapAt) || !canTrigger(action, forced))
             return false;
+
+        if (action.drag)
+        {
+            const name = action.animationNames[0];
+            if (name)
+                playDragAnimation(action.trackIndex, name);
+
+            clickCounts.set(action.item.index, (clickCounts.get(action.item.index) ?? 0) + 1);
+
+            if (fromPointer)
+                nextTapAt = now + 500;
+
+            return true;
+        }
 
         resetTracks(action);
 
@@ -610,7 +649,7 @@ export function createSpineInteractions(
         hitbox.rotation = -angle * Math.PI / 180;
         hitbox.hitArea = new Rectangle(-width / 2, -height / 2, width, height);
         hitbox.eventMode = "static";
-        hitbox.cursor = action.gesture ? "grab" : "pointer";
+        hitbox.cursor = action.gesture || action.drag ? "grab" : "pointer";
 
         const outline = new Graphics()
             .rect(-width / 2, -height / 2, width, height)
@@ -625,7 +664,24 @@ export function createSpineInteractions(
 
         setActive(action.item.index, !action.initiallyHidden);
 
-        if (action.gesture)
+        if (action.drag && options.scene)
+        {
+            disposeGestures.push(attachSpineObjectDrag(
+                hitbox,
+                spine,
+                action,
+                options.scene,
+                () => enabled && !destroyed && !gestureActive && hitbox.visible && isIdle(),
+                () => {
+                    gestureActive = true;
+                    clickCounts.set(action.item.index, (clickCounts.get(action.item.index) ?? 0) + 1);
+                },
+                () => { gestureActive = false },
+                (animation) => playDragAnimation(action.trackIndex, animation),
+                () => { trigger(action, true, false, true); }
+            ));
+        }
+        else if (action.gesture)
         {
             disposeGestures.push(attachSpineGesture(
                 hitbox,
@@ -734,6 +790,7 @@ export function createSpineInteractions(
             stopTracking();
 
             stages.clear();
+            fadingEntries.clear();
             stoppedActions.clear();
             hitboxes.clear();
             recoveringGestureTracks.clear();

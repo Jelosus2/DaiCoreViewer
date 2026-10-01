@@ -1,9 +1,16 @@
 import type { ParsedSpineTap } from "./parseSpineTap";
+import type { BuiltSpineScene } from "./buildSpineScene";
+import type { SpineRoot } from "@/types/spine";
 
 import { Spine } from "@esotericsoftware/spine-pixi-v8";
-import { Container, UPDATE_PRIORITY, type FederatedPointerEvent } from "pixi.js";
+import { Container, Rectangle, UPDATE_PRIORITY, type FederatedPointerEvent } from "pixi.js";
 
 type TrackEntry = ReturnType<Spine["state"]["setAnimation"]>;
+
+export type SpineObjectDragScene = BuiltSpineScene & {
+    root: SpineRoot;
+    getGamePortraitScale: () => number;
+};
 
 interface ActivePointer {
     id: number;
@@ -16,6 +23,15 @@ interface Recovery {
     entry: TrackEntry;
     wait: number;
     forward: boolean;
+}
+
+interface Pointer {
+    id: number;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+    started: boolean;
 }
 
 export function attachSpineGesture(
@@ -215,5 +231,285 @@ export function attachSpineGesture(
 
         pointer = undefined;
         stopRecovery();
+    };
+}
+
+export function attachSpineObjectDrag(
+    hitbox: Container,
+    spine: Spine,
+    action: ParsedSpineTap,
+    scene: SpineObjectDragScene,
+    canBegin: () => boolean,
+    onBegin: () => void,
+    onEnd: () => void,
+    onDrop: (animation: string) => void,
+    onRestore: () => void
+): () => void {
+    const drag = action.drag!;
+
+    function nodeAt(path: string): number {
+        let parent = 0;
+
+        for (const part of path.split("/"))
+        {
+            const index = scene.root.nodes.findIndex((node) => node.parent === parent && node.name === part);
+            if (index < 0)
+                throw new Error(`Missing drag prefab node: ${path}`);
+
+            parent = index;
+        }
+
+        return parent;
+    }
+
+    const objectIndex = nodeAt(`pos/${drag.targetObjName}`);
+    const object = scene.nodes[objectIndex];
+    const source = scene.root.nodes[objectIndex];
+
+    if (!source.image && !source.mask)
+        throw new Error(`Drag image was not exported for ${drag.targetObjName}`);
+
+    const targets = drag.targets.map((target) => {
+        const index = nodeAt(`pos/${target.object}`);
+        const transform = scene.root.nodes[index].transform;
+        const size = transform.sizeDelta;
+
+        if (!size || size.some((value) => !Number.isFinite(value) || value <= 0))
+            throw new Error(`Missing or invalid drop target size: ${target.object}`);
+
+        const [width, height] = size;
+        const [pivotX, pivotY] = transform.pivot ?? [0.5, 0.5];
+
+        return {
+            node: scene.nodes[index],
+            animation: target.animation,
+            bounds: new Rectangle(-pivotX * width, -(1 - pivotY) * height, width, height)
+        };
+    });
+
+    const overlayIndex = drag.hideSpine
+        ? nodeAt(`pos/${drag.hideSpine}`)
+        : undefined;
+
+    const overlay = overlayIndex === undefined
+        ? undefined
+        : scene.nodes[overlayIndex];
+
+    const overlaySpine = drag.hideSpine
+        ? scene.spines.find((candidate) => scene.spineNodes.get(candidate) === nodeAt(`pos/${drag.hideSpine}/pos/main`))
+        : undefined;
+
+    const origin = { x: object.position.x, y: object.position.y };
+
+    const overlayOrigin = overlay
+        ? { x: overlay.position.x, y: overlay.position.y }
+        : undefined;
+
+    const hiddenSlots: Array<{ slot: { color: { a: number } }; alpha: number }> = [];
+
+    let pointer: Pointer | undefined;
+    let holdTimer: ReturnType<typeof setTimeout> | undefined;
+    let fixedOverlay: { x: number; y: number } | undefined;
+    let restoreOnTap = false;
+    let lastDragEndAt = 0;
+
+    function clearHold() {
+        if (holdTimer !== undefined)
+            clearTimeout(holdTimer);
+
+        holdTimer = undefined;
+    }
+
+    function restoreSlots() {
+        for (const { slot, alpha } of hiddenSlots)
+            slot.color.a = alpha;
+
+        hiddenSlots.length = 0;
+    }
+
+    function resetObject() {
+        object.position.set(origin.x, origin.y);
+        object.visible = false;
+
+        if (overlay && overlayOrigin)
+            overlay.position.set(overlayOrigin.x, overlayOrigin.y);
+
+        fixedOverlay = undefined;
+    }
+
+    function moveObject(x: number, y: number) {
+        const local = object.parent!.toLocal({ x, y });
+        object.position.set(local.x, local.y);
+
+        if (overlay && fixedOverlay)
+        {
+            const global = scene.nodes[0].toGlobal(fixedOverlay);
+            const stable = overlay.parent!.toLocal(global);
+
+            overlay.position.set(stable.x, stable.y);
+        }
+    }
+
+    function begin() {
+        const current = pointer;
+        if (!current || current.started || !canBegin())
+            return;
+
+        clearHold();
+
+        current.started = true;
+        fixedOverlay = overlay
+            ? scene.nodes[0].toLocal(overlay.getGlobalPosition())
+            : undefined;
+
+        const mainIdle = spine.state.getCurrent(0);
+        const secondIdle = overlaySpine?.state.getCurrent(0);
+
+        if (mainIdle && secondIdle)
+        {
+            secondIdle.trackTime = mainIdle.trackTime;
+            overlaySpine!.update(0);
+        }
+
+        object.visible = true;
+
+        for (const name of drag.slots)
+        {
+            const slot = spine.skeleton.findSlot(name);
+            if (!slot)
+                continue;
+
+            hiddenSlots.push({ slot, alpha: slot.color.a });
+            slot.color.a = 0;
+        }
+
+        onBegin();
+        moveObject(current.x, current.y);
+    }
+
+    function onPointerDown(event: FederatedPointerEvent) {
+        if (pointer || restoreOnTap || !canBegin())
+            return;
+
+        pointer = {
+            id: event.pointerId,
+            startX: event.global.x,
+            startY: event.global.y,
+            x: event.global.x,
+            y: event.global.y,
+            started: false
+        };
+
+        if (drag.gesture === 6)
+            holdTimer = setTimeout(begin, 300);
+    }
+
+    function onPointerMove(event: FederatedPointerEvent) {
+        const current = pointer;
+        if (!current || current.id !== event.pointerId)
+            return;
+
+        current.x = event.global.x;
+        current.y = event.global.y;
+
+        if (!current.started && (current.x !== current.startX || current.y !== current.startY))
+            begin();
+
+        if (current.started)
+            moveObject(current.x, current.y);
+    }
+
+    function onPointerUp(event: FederatedPointerEvent, cancelled = false) {
+        const current = pointer;
+        if (!current || current.id !== event.pointerId)
+            return;
+
+        clearHold();
+        pointer = undefined;
+        if (!current.started)
+            return;
+
+        let animation: string | undefined;
+        if (!cancelled)
+        {
+            moveObject(event.global.x, event.global.y);
+
+            const prefabParent = scene.nodes[0].parent!;
+            const point = prefabParent.toLocal(object.getGlobalPosition());
+            const worldScale = (2 * 5 / 1080) * Math.abs(scene.getGamePortraitScale());
+            let closestDistance = 10;
+
+            for (const target of targets)
+            {
+                const local = target.node.toLocal(event.global);
+                if (!target.bounds.contains(local.x, local.y))
+                    continue;
+
+                const destination = prefabParent.toLocal(target.node.getGlobalPosition());
+                const distance = Math.hypot(point.x - destination.x, point.y - destination.y) * worldScale;
+
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    animation = target.animation;
+                }
+            }
+        }
+
+        resetObject();
+        onEnd();
+
+        lastDragEndAt = performance.now();
+
+        if (animation)
+        {
+            restoreSlots();
+            onDrop(animation);
+        }
+        else if (hiddenSlots.length > 0)
+        {
+            restoreOnTap = true;
+        }
+    }
+
+    function onPointerTap() {
+        if (!restoreOnTap || performance.now() - lastDragEndAt < 100)
+            return;
+
+        restoreOnTap = false;
+
+        restoreSlots();
+        onRestore();
+    }
+
+    function onPointerCancel(event: FederatedPointerEvent) {
+        onPointerUp(event, true);
+    }
+
+    hitbox.on("pointerdown", onPointerDown);
+    hitbox.on("globalpointermove", onPointerMove);
+    hitbox.on("pointerup", onPointerUp);
+    hitbox.on("pointerupoutside", onPointerUp);
+    hitbox.on("pointercancel", onPointerCancel);
+    hitbox.on("pointertap", onPointerTap);
+
+    return () => {
+        hitbox.off("pointerdown", onPointerDown);
+        hitbox.off("globalpointermove", onPointerMove);
+        hitbox.off("pointerup", onPointerUp);
+        hitbox.off("pointerupoutside", onPointerUp);
+        hitbox.off("pointercancel", onPointerCancel);
+        hitbox.off("pointertap", onPointerTap);
+
+        clearHold();
+
+        if (pointer?.started)
+        {
+            resetObject();
+            onEnd();
+        }
+
+        pointer = undefined;
+        restoreSlots();
     };
 }

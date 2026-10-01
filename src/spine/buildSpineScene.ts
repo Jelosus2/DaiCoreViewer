@@ -1,11 +1,19 @@
 import type { SpineRoot } from "@/types/spine";
 
 import { Spine, SetupPoseBoundsProvider } from "@esotericsoftware/spine-pixi-v8";
-import { Container } from "pixi.js";
+import { Container, Sprite } from "pixi.js";
+
+export interface BuiltSpineScene {
+    spines: Spine[];
+    nodes: Container[];
+    spineNodes: Map<Spine, number>;
+}
 
 export function buildSpineScene(root: SpineRoot, stageParent: Container, cacheKeys: Set<string>) {
     const containers: Container[] = [];
-    const instances: Spine[] = [];
+    const contentParents: Container[] = [];
+    const spines: Spine[] = [];
+    const spineNodes = new Map<Spine, number>();
     const parentIndices = new Set(root.nodes.map((node) => node.parent));
     let scene: Container | undefined;
 
@@ -43,7 +51,7 @@ export function buildSpineScene(root: SpineRoot, stageParent: Container, cacheKe
         }
         else
         {
-            const parent = containers[node.parent];
+            const parent = contentParents[node.parent];
             if (!parent)
                 throw new Error(`Invalid parent for ${node.name}`);
 
@@ -51,6 +59,20 @@ export function buildSpineScene(root: SpineRoot, stageParent: Container, cacheKe
         }
 
         containers.push(container);
+
+        const content = node.mask ? new Container() : container;
+        if (node.mask)
+        {
+            const mask = makeImage(node.mask, node);
+
+            container.addChild(content, mask);
+            content.setMask({ mask, inverse: false, channel: "alpha" });
+        }
+
+        contentParents.push(content);
+
+        if (node.image)
+            content.addChild(makeImage(node.image, node));
 
         for (const source of node.spines) {
             const instance = Spine.from({
@@ -68,15 +90,32 @@ export function buildSpineScene(root: SpineRoot, stageParent: Container, cacheKe
 
             instance.state.timeScale = source.timeScale;
 
-            container.addChild(instance);
-            instances.push(instance);
+            content.addChild(instance);
+            spines.push(instance);
+            spineNodes.set(instance, index);
         }
     }
 
     if (!scene)
         throw new Error("Prefab has no root node");
 
-    return instances;
+    return { spines, nodes: containers, spineNodes };
+}
+
+function makeImage(url: string, node: SpineRoot["nodes"][number]): Sprite {
+    const size = node.transform.sizeDelta;
+    if (!size)
+        throw new Error(`Missing image size in ${node.name}`);
+
+    const sprite = Sprite.from(url);
+    const pivot = node.transform.pivot ?? [0.5, 0.5];
+
+    sprite.anchor.set(pivot[0], pivot[1]);
+    sprite.width = size[0];
+    sprite.height = size[1];
+    sprite.eventMode = "none";
+
+    return sprite;
 }
 
 function isCentered(point?: [number, number]) {

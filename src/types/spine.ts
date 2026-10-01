@@ -32,8 +32,11 @@ export interface SpineNode {
         anchorMin?: [number, number];
         anchorMax?: [number, number];
         pivot?: [number, number];
+        sizeDelta?: [number, number];
     };
     spines: SpineAsset[];
+    image?: string;
+    mask?: string;
 }
 
 export interface SpineRoot {
