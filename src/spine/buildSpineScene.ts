@@ -34,7 +34,23 @@ export function buildSpineScene(root: SpineRoot, stageParent: Container, cacheKe
         }
 
         const container = new Container();
-        const [x, y] = transform.anchoredPosition ?? [transform.position[0], transform.position[1]];
+        const parentTransform = node.parent === null
+            ? undefined
+            : root.nodes[node.parent]?.transform;
+
+        let [x, y] = transform.anchoredPosition ?? [transform.position[0], transform.position[1]];
+
+        if (
+            transform.anchoredPosition && parentTransform?.sizeDelta &&
+            isCentered(transform.anchorMin) && isCentered(transform.anchorMax) &&
+            isCentered(parentTransform.anchorMin) && isCentered(parentTransform.anchorMax)
+        )
+        {
+            const pivot = parentTransform.pivot ?? [0.5, 0.5];
+
+            x += (0.5 - pivot[0]) * parentTransform.sizeDelta[0];
+            y += (0.5 - pivot[1]) * parentTransform.sizeDelta[1];
+        }
 
         container.position.set(x, -y);
         container.scale.set(transform.scale[0], transform.scale[1]);
@@ -82,6 +98,11 @@ export function buildSpineScene(root: SpineRoot, stageParent: Container, cacheKe
             });
 
             cacheKeys.add(`${source.json}-${source.atlas}-1`);
+
+            instance.state.data.defaultMix = source.defaultMix ?? 0;
+
+            for (const mix of source.animationMixes ?? [])
+                instance.state.data.setMix(mix.from, mix.to, mix.duration);
 
             if (source.initialSkin)
                 instance.skeleton.setSkinByName(source.initialSkin);

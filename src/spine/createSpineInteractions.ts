@@ -3,6 +3,7 @@ import type { SpineActionConfig, SpineActionItem } from "@/types/spine";
 import { parseSpineTap, type ParsedSpineTap, type SpineRoleTransition } from "./parseSpineTap";
 import { attachSpineGesture, attachSpineObjectDrag, type SpineObjectDragScene } from "./attachSpineGesture";
 import { bindSpineSlotHotspots, type SpineSlotHotspot } from "./bindSpineSlotHotspots";
+import { prepareIdleTransitionAnimation } from "./prepareIdleTransitionAnimation";
 import { Spine } from "@esotericsoftware/spine-pixi-v8";
 import { Container, Graphics, Rectangle, UPDATE_PRIORITY } from "pixi.js";
 
@@ -609,8 +610,14 @@ export function createSpineInteractions(
 
             if (action.trackIndex === 1 && animationName)
             {
+                const animation = spine.skeleton.data.findAnimation(animationName)!;
+                const playback = action.changeIdle
+                    ? prepareIdleTransitionAnimation(animation)
+                    : animation;
+
                 spine.state.setEmptyAnimation(1, 0);
-                entry = spine.state.addAnimation(1, animationName, false, 0);
+
+                entry = spine.state.addAnimationWith(1, playback, false, 0);
                 entry.mixDuration = action.noFade ? 0 : 0.2;
 
                 if (action.noFade)

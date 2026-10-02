@@ -17,6 +17,12 @@ export interface SpineAsset {
     initialAnimation: string;
     loop: boolean;
     timeScale: number;
+    defaultMix: number;
+    animationMixes: Array<{
+        from: string;
+        to: string;
+        duration: number;
+    }>;
 }
 
 export interface SpineNode {
