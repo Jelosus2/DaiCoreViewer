@@ -2,6 +2,7 @@ import type { SpineActionConfig, SpineActionItem } from "@/types/spine";
 
 import { parseSpineTap, type ParsedSpineTap, type SpineRoleTransition } from "./parseSpineTap";
 import { attachSpineGesture, attachSpineObjectDrag, type SpineObjectDragScene } from "./attachSpineGesture";
+import { bindSpineSlotHotspots, type SpineSlotHotspot } from "./bindSpineSlotHotspots";
 import { Spine } from "@esotericsoftware/spine-pixi-v8";
 import { Container, Graphics, Rectangle, UPDATE_PRIORITY } from "pixi.js";
 
@@ -82,6 +83,10 @@ export function createSpineInteractions(
     const { orderPositions, clickCounts, stageSteps } = state;
     const timers = new Set<ReturnType<typeof setTimeout>>();
     const disposeGestures: Array<() => void> = [];
+    const slotHotspots: SpineSlotHotspot[] = [];
+    const slotNames: Record<number, string> = interaction.id === 7031003
+        ? { 8: "ui1", 12: "ui2" }
+        : {};
     const recoveringGestureTracks = new Set<number>();
     let tracking = false;
     let destroyed = false;
@@ -660,6 +665,11 @@ export function createSpineInteractions(
 
         outlines.push(outline);
         hitbox.addChild(outline);
+
+        const slotName = slotNames[action.item.index];
+        if (slotName)
+            slotHotspots.push({ slotName, hitbox, outline });
+
         hitboxes.set(action.item.index, hitbox);
 
         setActive(action.item.index, !action.initiallyHidden);
@@ -711,6 +721,9 @@ export function createSpineInteractions(
 
         layer.addChild(hitbox);
     }
+
+    if (slotHotspots.length > 0)
+        disposeGestures.push(bindSpineSlotHotspots(layer, spine, slotHotspots));
 
     for (const action of actions)
     {

@@ -173,7 +173,7 @@ onUnmounted(() => controller.abort());
                 </label>
 
                 <label
-                    v-if="root && selectedOption?.interaction && selectedOption.render.layerCount === 1"
+                    v-if="root && selectedOption?.interaction"
                     class="flex items-center gap-2 pb-2 text-sm text-muted"
                 >
                     <input v-model="showHotspots" type="checkbox" class="accent-focus">
