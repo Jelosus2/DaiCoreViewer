@@ -1,4 +1,4 @@
-import { Animation, MixBlend, TranslateTimeline, TranslateXTimeline, TranslateYTimeline} from "@esotericsoftware/spine-pixi-v8";
+import { Animation, MixBlend, TranslateTimeline, TranslateXTimeline, TranslateYTimeline } from "@esotericsoftware/spine-pixi-v8";
 
 const preparedAnimations = new WeakMap<Animation, Animation>();
 

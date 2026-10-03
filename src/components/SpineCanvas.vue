@@ -1,17 +1,11 @@
 <script setup lang="ts">
 import type { SpineRoot, SpinePlacement, SpineFraming, SpineActionConfig, SpineActionTarget, SpineRender } from "@/types/spine";
 
-import MachairodusMinigame from "./minigames/MachairodusMinigame.vue";
-import VodkaMinigame from "./minigames/VodkaMinigame.vue";
-
 import { createSpineTransitionSession } from "@/spine/createSpineTransitionSession";
-import { loadMachairodusAssets } from "@/minigames/machairodusAssets";
-import { loadVodkaAssets } from "@/minigames/vodkaAssets.ts";
-import { targetWidth, targetHeight, type MachairodusTargetView } from "@/minigames/machairodusMotion.ts";
-import { createMachairodusSpark } from "@/minigames/machairodusEffects.ts";
 import { acquireEntranceEffects, entranceTextureUrls } from "@/spine/playSpineEntrance.ts";
+import { useMinigameSession } from "@/minigames/useMinigameSession";
 import { useSettingsStore } from "@/stores/settingsStore.ts";
-import { Application, Assets, Cache, Container, Sprite, Texture } from "pixi.js";
+import { Application, Assets, Cache, Container, Texture } from "pixi.js";
 import { onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import "pixi.js/prepare";
 
@@ -30,10 +24,6 @@ const host = useTemplateRef<HTMLDivElement>("host");
 const loading = ref(true);
 const errorMessage = ref("");
 const zoom = ref(1);
-const machairodusOpen = ref(false);
-const machairodusSprites = ref<Record<string, string> | null>(null);
-const vodkaOpen = ref(false);
-const vodkaSprites = ref<Record<string, string> | null>(null);
 
 const settingsStore = useSettingsStore();
 
@@ -42,10 +32,6 @@ const loadedAssets = new Set<string>();
 const loadedPages = new Set<string>();
 const pendingLoads = new Set<Promise<void>>();
 const viewOffset = { x: 0, y: 0 };
-const hasMachairodusMinigame = props.interaction?.id === 3018005 && props.render.l2dName === "30180_skin_Machairodus05a_spine";
-const hasVodkaMinigame = props.interaction?.id === 7501003 && props.render.l2dName === "75010_skin_VodkaMirror03_spine";
-const targetSprites = new Map<number, Sprite>();
-const targetEffects = new Map<number, ReturnType<typeof createMachairodusSpark>>();
 
 let disposed = false;
 let application: Application | undefined;
@@ -55,11 +41,25 @@ let reframe: (() => void) | undefined;
 let activeCamera: Container | undefined;
 let session: ReturnType<typeof createSpineTransitionSession> | undefined;
 let activeArtLayer: Container | undefined;
-let activeTargetLayer: Container | undefined;
-let targetTextures: { gold: Texture; normal: Texture; } | undefined;
-let effectTextures: { streak: Texture; flare: Texture } | undefined;
 let entranceCentered = false;
 let entranceAssets: ReturnType<typeof acquireEntranceEffects> | undefined;
+
+const minigame = useMinigameSession({
+    render: props.render,
+    interaction: props.interaction,
+    loadTexture: (url) => loadTrackedAsset<Texture>(url),
+    playAction: playMinigameAction,
+    isIdle: isMinigameIdle,
+    onOpenChange: (open) => {
+        if (open)
+            resetZoom();
+        else
+            reframe?.();
+    }
+});
+
+const minigameOverlay = minigame.overlay;
+const minigameOpen = minigame.open;
 
 watch([() => props.framing, () => props.placement], resetZoom);
 
@@ -135,58 +135,10 @@ async function setup() {
 
         await loadRoot(props.root);
 
-        let backgroundTextures: Texture[] = [];
-
-        if (hasMachairodusMinigame && !disposed)
-        {
-            const ui = await loadMachairodusAssets();
-
-            if (disposed)
-                return;
-
-            machairodusSprites.value = ui.sprites;
-
-            const urls = [...ui.backgrounds, ui.sprites.img_04_01, ui.sprites.img_04_02, ...ui.effects];
-            const [background1, background2, gold, normal, streak, flare] = await Promise.all(urls.map((url) => loadTrackedAsset<Texture>(url)));
-
-            if (disposed)
-            {
-                await releaseAssets();
-                return;
-            }
-
-            backgroundTextures = [background1, background2];
-            targetTextures = { gold, normal };
-            effectTextures = { streak, flare };
-
-            for (const url of urls)
-                loadedAssets.add(url);
-        }
-
-        if (targetTextures && effectTextures)
-        {
-            await app.renderer.prepare?.upload([
-                ...backgroundTextures,
-                targetTextures.gold,
-                targetTextures.normal,
-                effectTextures.streak,
-                effectTextures.flare
-            ]);
-        }
-
         if (disposed)
         {
-            await releaseAssets();
+            await releaseAssets()
             return;
-        }
-
-        if (hasVodkaMinigame && !disposed)
-        {
-            const sprites = await loadVodkaAssets();
-            if (disposed)
-                return;
-
-            vodkaSprites.value = sprites;
         }
 
         entranceAssets = acquireEntranceEffects();
@@ -207,28 +159,6 @@ async function setup() {
         }
 
         const camera = new Container();
-        const backgroundLayer = new Container();
-        backgroundLayer.visible = false;
-
-        const backgrounds = backgroundTextures.map((texture) => {
-            const background = Sprite.from(texture);
-            background.anchor.set(0.5);
-            background.width = 2590;
-            background.height = 1080;
-
-            return background;
-        });
-
-        if (backgrounds[0])
-            backgroundLayer.addChild(backgrounds[0]);
-
-        const targetLayer = new Container();
-        backgroundLayer.addChild(targetLayer);
-        activeTargetLayer = targetLayer;
-
-        if (backgrounds[1])
-            backgroundLayer.addChild(backgrounds[1]);
-
         const portrait = new Container();
         const entranceWrapper = new Container();
         const entranceLayer = new Container();
@@ -242,9 +172,20 @@ async function setup() {
         activeArtLayer = artLayer;
 
         app.stage.addChild(camera);
-        camera.addChild(backgroundLayer, portrait, overlayLayer);
+        camera.addChild(portrait, overlayLayer);
         portrait.addChild(entranceWrapper);
         entranceWrapper.addChild(artLayer, hotspotLayer, entranceLayer);
+
+        await minigame.prepare({
+            camera,
+            uploadTextures: async (textures) => await app.renderer.prepare?.upload(textures)
+        });
+
+        if (disposed)
+        {
+            await releaseAssets();
+            return;
+        }
 
         session = createSpineTransitionSession({
             initialRender: props.render,
@@ -261,17 +202,8 @@ async function setup() {
             onError: (error) => {
                 errorMessage.value = error instanceof Error ? error.message : String(error);
             },
-            onSpineUIChange: hasMachairodusMinigame || hasVodkaMinigame
-                ? (open) => {
-                    machairodusOpen.value = hasMachairodusMinigame && open;
-                    backgroundLayer.visible = hasMachairodusMinigame && open;
-                    vodkaOpen.value = hasVodkaMinigame && open;
-
-                    if (open)
-                        resetZoom();
-                    else
-                        reframe?.();
-                }
+            onSpineUIChange: minigame.supported
+                ? minigame.setOpen
                 : undefined,
             getGamePortraitScale: () => props.placement?.[2] ?? 1,
             shouldPlayEntrance: () => settingsStore.claimEntranceAnimation(props.assetKey),
@@ -294,8 +226,20 @@ async function setup() {
         activeCamera = camera;
 
         const resize = () => {
-            if (!disposed)
-                frame(element, app, camera, portrait, artLayer, entranceCentered || vodkaOpen.value ? [0, 0, 1] : props.placement, props.framing);
+            if (disposed)
+                return;
+
+            const currentFrame = minigame.getFraming(props.placement, props.framing);
+
+            frame(
+                element,
+                app,
+                camera,
+                portrait,
+                artLayer,
+                entranceCentered ? [0, 0, 1] : currentFrame.placement,
+                currentFrame.mode
+            );
         };
 
         reframe = resize;
@@ -422,90 +366,8 @@ function isMinigameIdle(): boolean {
     return session?.isIdle() ?? false;
 }
 
-function updateMachairodusTargets(targets: MachairodusTargetView[]) {
-    const layer = activeTargetLayer;
-    const textures = targetTextures;
-    const effects = effectTextures;
-
-    if (!layer || !textures || !effects)
-        return;
-
-    const ids = new Set<number>();
-
-    for (const target of targets)
-    {
-        ids.add(target.id);
-        let sprite = targetSprites.get(target.id);
-
-        if (!sprite)
-        {
-            sprite = Sprite.from(target.gold ? textures.gold : textures.normal);
-            sprite.anchor.set(0.5, 1);
-            sprite.width = targetWidth;
-            sprite.height = targetHeight;
-
-            layer.addChild(sprite);
-            targetSprites.set(target.id, sprite);
-        }
-
-        const fold = Math.max(0, Math.cos(target.tilt * Math.PI / 180));
-        const direction = target.upper ? -1 : 1;
-
-        sprite.position.set(target.x, target.y + direction * targetHeight / 2);
-        sprite.scale.set(
-            direction * targetWidth / sprite.texture.width,
-            direction * fold * targetHeight / sprite.texture.height
-        );
-
-        if (target.exitAge !== null)
-        {
-            let spark = targetEffects.get(target.id);
-
-            if (!spark)
-            {
-                spark = createMachairodusSpark(effects.streak, effects.flare);
-
-                targetEffects.set(target.id, spark);
-                layer.addChild(spark.view);
-            }
-
-            spark.view.position.set(target.x + direction * 15.2 * 1.024, target.y - direction * 6.4 * 1.024);
-            spark.view.scale.set(direction * 1.024, direction * 1.024);
-            spark.update(target.exitAge);
-        }
-    }
-
-    for (const [id, sprite] of targetSprites)
-    {
-        if (ids.has(id))
-            continue;
-
-        layer.removeChild(sprite);
-        sprite.destroy();
-
-        const spark = targetEffects.get(id);
-        if (spark)
-        {
-            spark.view.destroy({ children: true });
-            targetEffects.delete(id);
-        }
-
-        targetSprites.delete(id);
-    }
-}
-
 function destroyView() {
-    machairodusOpen.value = false;
-    machairodusSprites.value = null;
-
-    vodkaOpen.value = false;
-    vodkaSprites.value = null;
-
-    activeTargetLayer = undefined;
-    targetTextures = undefined;
-    effectTextures = undefined;
-    targetSprites.clear();
-    targetEffects.clear();
+    minigame.destroy();
 
     reframe = undefined;
 
@@ -604,20 +466,11 @@ onUnmounted(() => {
             {{ errorMessage }}
         </p>
 
-        <MachairodusMinigame
-            v-if="machairodusSprites"
-            :active="machairodusOpen && !loading"
-            :sprites="machairodusSprites"
-            :play-action="playMinigameAction"
-            :targets-changed="updateMachairodusTargets"
-        />
-
-        <VodkaMinigame
-            v-if="vodkaSprites"
-            :active="vodkaOpen && !loading"
-            :sprites="vodkaSprites"
-            :play-action="playMinigameAction"
-            :is-idle="isMinigameIdle"
+        <component
+            v-if="minigameOverlay"
+            :is="minigameOverlay.component"
+            v-bind="minigameOverlay.props"
+            :active="minigameOpen && !loading && !errorMessage"
         />
     </div>
 </template>

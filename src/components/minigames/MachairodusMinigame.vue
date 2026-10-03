@@ -80,7 +80,7 @@ watch(() => props.active, (active) => {
         start();
     else
         stop();
-}, { flush: "post" });
+}, { flush: "sync" });
 
 function sprite(name: string): string {
     return props.sprites[name] ?? "";
