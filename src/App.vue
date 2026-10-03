@@ -3,11 +3,15 @@ import type { SpineManifest, SpineFraming } from "./types/spine";
 import type { ViewerCategory } from "./types/viewer.ts";
 import { viewerCategories } from "./types/viewer.ts";
 
+import SettingsModal from "./components/SettingsModal.vue";
 import AssetSidebar from "./components/AssetSidebar.vue";
 import SpineCanvas from "./components/SpineCanvas.vue";
+import SiteNavbar from "./components/SiteNavbar.vue";
 
 import { buildSpineCatalog } from "./spine/buildSpineCatalog.ts";
+import { useSettingsStore } from "./stores/settingsStore.ts";
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { storeToRefs } from "pinia";
 
 const manifest = shallowRef<SpineManifest | null>(null);
 const category = ref<ViewerCategory>("characters");
@@ -17,7 +21,11 @@ const selectedOptionId = ref<string | null>(null);
 const loading = ref(true);
 const errorMessage = ref("");
 const showHotspots = ref(false);
+const settingsOpen = ref(false);
 const controller = new AbortController();
+
+const settingsStore = useSettingsStore();
+const { entranceAnimation } = storeToRefs(settingsStore);
 
 const catalog = computed(() => buildSpineCatalog(manifest.value));
 const items = computed(() => catalog.value[category.value]);
@@ -108,102 +116,112 @@ onUnmounted(() => controller.abort());
 </script>
 
 <template>
-    <main class="flex min-h-screen flex-col bg-page text-white lg:h-screen lg:flex-row">
-        <AssetSidebar
-            :catalog="catalog"
-            :category="category"
-            :selected-id="selectedItemId"
-            :loading="loading"
-            @category="chooseCategory"
-            @select="chooseItem"
-        />
+    <div class="flex min-h-dvh flex-col bg-page text-white lg:h-dvh">
+        <SiteNavbar @settings="settingsOpen = true" />
 
-        <section class="flex min-h-0 min-w-0 flex-1 flex-col p-5">
-            <h1 class="text-2xl font-bold">DaiCoreViewer</h1>
-            <p class="mt-1 text-muted">
-                {{ selectedItem?.name ?? "Select an asset" }}
-            </p>
-            <p v-if="selectedItem" class="mt-1 text-sm text-subtle">
-                {{ selectedItem.detail }}
-            </p>
-
-            <div v-if="selectedItem" class="mt-5 flex flex-wrap items-end gap-4">
-                <label
-                    v-if="selectedItem.options.length > 1"
-                    for="option-select"
-                    class="grid gap-1 text-sm text-muted"
-                >
-                    {{ category === "characters" ? "Skin / model" : "Variant" }}
-                    <select
-                        id="option-select"
-                        v-model="selectedOptionId"
-                        class="min-w-64 rounded border border-line bg-control px-3 py-2 focus:border-focus focus:outline-none"
-                    >
-                        <option
-                            v-for="option in selectedItem.options"
-                            :key="option.id"
-                            :value="option.id"
-                        >
-                            {{ option.label }}
-                        </option>
-                    </select>
-                </label>
-
-                <p
-                    v-if="selectedOption?.render.status === 'ready'"
-                    class="pb-2 text-sm text-subtle"
-                >
-                    {{ selectedOption.render.layerCount }} layer(s)
-                </p>
-
-                <label
-                    v-if="root && selectedOption?.placement"
-                    for="framing-select"
-                    class="grid gap-1 text-sm text-muted"
-                >
-                    View
-                    <select
-                        id="framing-select"
-                        v-model="framing"
-                        class="rounded border border-line bg-control px-3 py-2 focus:border-focus focus:outline-none"
-                    >
-                        <option value="game">Game framing</option>
-                        <option value="fit">Fit asset</option>
-                    </select>
-                </label>
-
-                <label
-                    v-if="root && selectedOption?.interaction"
-                    class="flex items-center gap-2 pb-2 text-sm text-muted"
-                >
-                    <input v-model="showHotspots" type="checkbox" class="accent-focus">
-                    Show tap regions
-                </label>
-            </div>
-
-            <SpineCanvas
-                v-if="root"
-                :key="`${category}:${selectedItemId}:${selectedOptionId}`"
-                :root="root"
-                :render="selectedOption!.render"
-                :placement="selectedOption?.placement"
-                :framing="framing"
-                :interaction="selectedOption?.interaction"
-                :transition-targets="transitionTargets"
-                :show-hotspots="showHotspots"
-                class="mt-5 h-[60vh] min-h-80 overflow-hidden rounded-xl border border-line bg-stage lg:min-h-0 lg:flex-1"
+        <main class="flex min-h-0 flex-1 flex-col lg:flex-row">
+            <AssetSidebar
+                :catalog="catalog"
+                :category="category"
+                :selected-id="selectedItemId"
+                :loading="loading"
+                @category="chooseCategory"
+                @select="chooseItem"
             />
-            <div
-                v-else
-                role="status"
-                class="mt-5 grid min-h-80 place-items-center rounded-xl border border-line bg-stage p-6 text-center text-muted"
-            >
-                <p v-if="loading">Loading manifest...</p>
-                <p v-else-if="errorMessage" class="text-red-300">
-                    {{ errorMessage }}
+
+            <section class="flex min-h-0 min-w-0 flex-1 flex-col p-5">
+                <h1 class="text-2xl font-bold">
+                    {{ selectedItem?.name ?? "Select an asset" }}
+                </h1>
+                <p v-if="selectedItem" class="mt-1 text-sm text-subtle">
+                    {{ selectedItem.detail }}
                 </p>
-                <p v-else>{{ unavailableMessage }}</p>
-            </div>
-        </section>
-    </main>
+
+                <div v-if="selectedItem" class="mt-5 flex flex-wrap items-end gap-4">
+                    <label
+                        v-if="selectedItem.options.length > 1"
+                        for="option-select"
+                        class="grid gap-1 text-sm text-muted"
+                    >
+                        {{ category === "characters" ? "Skin / model" : "Variant" }}
+                        <select
+                            id="option-select"
+                            v-model="selectedOptionId"
+                            class="min-w-64 rounded border border-line bg-control px-3 py-2 focus:border-focus focus:outline-none"
+                        >
+                            <option
+                                v-for="option in selectedItem.options"
+                                :key="option.id"
+                                :value="option.id"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select>
+                    </label>
+
+                    <p
+                        v-if="selectedOption?.render.status === 'ready'"
+                        class="pb-2 text-sm text-subtle"
+                    >
+                        {{ selectedOption.render.layerCount }} layer(s)
+                    </p>
+
+                    <label
+                        v-if="root && selectedOption?.placement"
+                        for="framing-select"
+                        class="grid gap-1 text-sm text-muted"
+                    >
+                        View
+                        <select
+                            id="framing-select"
+                            v-model="framing"
+                            class="rounded border border-line bg-control px-3 py-2 focus:border-focus focus:outline-none"
+                        >
+                            <option value="game">Game framing</option>
+                            <option value="fit">Fit asset</option>
+                        </select>
+                    </label>
+
+                    <label
+                        v-if="root && selectedOption?.interaction"
+                        class="flex items-center gap-2 pb-2 text-sm text-muted"
+                    >
+                        <input v-model="showHotspots" type="checkbox" class="accent-focus">
+                        Show tap regions
+                    </label>
+                </div>
+
+                <SpineCanvas
+                    v-if="root"
+                    :key="`${category}:${selectedItemId}:${selectedOptionId}`"
+                    :root="root"
+                    :render="selectedOption!.render"
+                    :placement="selectedOption?.placement"
+                    :framing="framing"
+                    :interaction="selectedOption?.interaction"
+                    :transition-targets="transitionTargets"
+                    :show-hotspots="showHotspots"
+                    :asset-key="`${category}:${selectedItemId}:${selectedOptionId}`"
+                    class="mt-5 h-[60vh] min-h-80 overflow-hidden rounded-xl border border-line bg-stage lg:min-h-0 lg:flex-1"
+                />
+                <div
+                    v-else
+                    role="status"
+                    class="mt-5 grid min-h-80 place-items-center rounded-xl border border-line bg-stage p-6 text-center text-muted"
+                >
+                    <p v-if="loading">Loading manifest...</p>
+                    <p v-else-if="errorMessage" class="text-red-300">
+                        {{ errorMessage }}
+                    </p>
+                    <p v-else>{{ unavailableMessage }}</p>
+                </div>
+            </section>
+        </main>
+
+        <SettingsModal
+            v-model:open="settingsOpen"
+            :entrance-animation="entranceAnimation"
+            @update:entrance-animation="settingsStore.setEntranceAnimation"
+        />
+    </div>
 </template>

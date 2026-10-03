@@ -1,8 +1,10 @@
 import type { SpineActionConfig, SpineActionItem, SpineActionTarget, SpineRender, SpineRoot } from "@/types/spine";
+import type { EntranceEffects } from "./playSpineEntrance";
 
 import { parseSpineTap, type SpineRoleTransition } from "./parseSpineTap";
 import { buildSpineScene } from "./buildSpineScene";
 import { createSpineInteractions, createSpineInteractionState } from "./createSpineInteractions";
+import { playSpineEntrance } from "./playSpineEntrance";
 import { Spine } from "@esotericsoftware/spine-pixi-v8";
 import { Container, Ticker } from "pixi.js";
 
@@ -23,6 +25,12 @@ interface TransitionSessionOptions {
     onError: (error: unknown) => void;
     onSpineUIChange?: (open: boolean) => void;
     getGamePortraitScale: () => number;
+    shouldPlayEntrance?: () => boolean;
+    onEntranceChange?: (centered: boolean) => void;
+    entranceEffects: EntranceEffects;
+    entranceWrapper: Container;
+    entranceLayer: Container;
+    entranceSkipTarget: HTMLElement;
 }
 
 export function createSpineTransitionSession(options: TransitionSessionOptions) {
@@ -51,6 +59,7 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
     let destroyed = false;
     let generation = 0;
     let spineUIOpen = false;
+    let disposeEntrance: (() => void) | undefined;
 
     function wait(ms: number): Promise<void> {
         if (destroyed || ms <= 0)
@@ -105,7 +114,13 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
         return request;
     }
 
-    function mount(root: SpineRoot, role: number) {
+    function mount(root: SpineRoot, role: number, withEntrance = false) {
+        disposeEntrance?.();
+        disposeEntrance = undefined;
+
+        options.hotspotLayer.visible = true;
+        options.onEntranceChange?.(false);
+
         closeSpineUI();
 
         interactions?.destroy();
@@ -146,6 +161,28 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
                 canTransition,
                 onTransition: beginTransition,
                 onSpineUI: options.onSpineUIChange ? toggleSpineUI : undefined
+            });
+        }
+
+        if (withEntrance)
+        {
+            const initiallyActive = spines.filter((spine) => root.nodes[scene.spineNodes.get(spine)!].activeInitially);
+
+            disposeEntrance = playSpineEntrance(initiallyActive, {
+                ticker: options.ticker,
+                wrapper: options.entranceWrapper,
+                layer: options.entranceLayer,
+                effects: options.entranceEffects,
+                skipTarget: options.entranceSkipTarget,
+                shouldPlay: options.shouldPlayEntrance ?? (() => false),
+                onPlayingChange: (playing) => {
+                    interactions?.setEnabled(!playing);
+                    options.hotspotLayer.visible = !playing;
+                },
+                onCenteredChange: (centered) => {
+                    options.onEntranceChange?.(centered);
+                    options.onSceneChanged();
+                }
             });
         }
 
@@ -311,7 +348,7 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
             if (!options.initialRender.root)
                 throw new Error("Initial Spine root is missing");
 
-            mount(options.initialRender.root, currentRole);
+            mount(options.initialRender.root, currentRole, true);
         },
         setDebugVisible(visible: boolean) {
             options.showHotspots = visible;
@@ -319,6 +356,10 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
         },
         destroy() {
             destroyed = true;
+
+            disposeEntrance?.();
+            disposeEntrance = undefined;
+
             closeSpineUI();
 
             generation++;

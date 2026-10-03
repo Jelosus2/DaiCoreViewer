@@ -7,6 +7,8 @@ import { createSpineTransitionSession } from "@/spine/createSpineTransitionSessi
 import { loadMachairodusAssets } from "@/minigames/machairodusAssets";
 import { targetWidth, targetHeight, type MachairodusTargetView } from "@/minigames/machairodusMotion.ts";
 import { createMachairodusSpark } from "@/minigames/machairodusEffects.ts";
+import { acquireEntranceEffects, entranceTextureUrls } from "@/spine/playSpineEntrance.ts";
+import { useSettingsStore } from "@/stores/settingsStore.ts";
 import { Application, Assets, Cache, Container, Sprite, Texture } from "pixi.js";
 import { onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import "pixi.js/prepare";
@@ -19,6 +21,7 @@ const props = defineProps<{
     interaction?: SpineActionConfig;
     transitionTargets?: SpineActionTarget[];
     showHotspots: boolean;
+    assetKey: string;
 }>();
 
 const host = useTemplateRef<HTMLDivElement>("host");
@@ -27,6 +30,8 @@ const errorMessage = ref("");
 const zoom = ref(1);
 const machairodusOpen = ref(false);
 const machairodusSprites = ref<Record<string, string> | null>(null);
+
+const settingsStore = useSettingsStore();
 
 const cacheKeys = new Set<string>();
 const loadedAssets = new Set<string>();
@@ -48,6 +53,8 @@ let activeArtLayer: Container | undefined;
 let activeTargetLayer: Container | undefined;
 let targetTextures: { gold: Texture; normal: Texture; } | undefined;
 let effectTextures: { streak: Texture; flare: Texture } | undefined;
+let entranceCentered = false;
+let entranceAssets: ReturnType<typeof acquireEntranceEffects> | undefined;
 
 watch([() => props.framing, () => props.placement], resetZoom);
 
@@ -168,6 +175,23 @@ async function setup() {
             return;
         }
 
+        entranceAssets = acquireEntranceEffects();
+        const entranceEffects = await entranceAssets.ready;
+
+        if (disposed || !entranceEffects)
+        {
+            await releaseAssets();
+            return;
+        }
+
+        await app.renderer.prepare?.upload(entranceTextureUrls(entranceEffects).map((url) => Assets.get<Texture>(url)));
+
+        if (disposed)
+        {
+            await releaseAssets();
+            return;
+        }
+
         const camera = new Container();
         const backgroundLayer = new Container();
         backgroundLayer.visible = false;
@@ -192,6 +216,10 @@ async function setup() {
             backgroundLayer.addChild(backgrounds[1]);
 
         const portrait = new Container();
+        const entranceWrapper = new Container();
+        const entranceLayer = new Container();
+        entranceLayer.eventMode = "none";
+
         const artLayer = new Container();
         const hotspotLayer = new Container();
         const overlayLayer = new Container();
@@ -201,7 +229,8 @@ async function setup() {
 
         app.stage.addChild(camera);
         camera.addChild(backgroundLayer, portrait, overlayLayer);
-        portrait.addChild(artLayer, hotspotLayer);
+        portrait.addChild(entranceWrapper);
+        entranceWrapper.addChild(artLayer, hotspotLayer, entranceLayer);
 
         session = createSpineTransitionSession({
             initialRender: props.render,
@@ -229,7 +258,13 @@ async function setup() {
                         reframe?.();
                 }
                 : undefined,
-            getGamePortraitScale: () => props.placement?.[2] ?? 1
+            getGamePortraitScale: () => props.placement?.[2] ?? 1,
+            shouldPlayEntrance: () => settingsStore.claimEntranceAnimation(props.assetKey),
+            onEntranceChange: (centered) => { entranceCentered = centered; },
+            entranceEffects,
+            entranceWrapper,
+            entranceLayer,
+            entranceSkipTarget: app.canvas
         });
         await session.preloadTransitions();
 
@@ -245,13 +280,15 @@ async function setup() {
 
         const resize = () => {
             if (!disposed)
-                frame(element, app, camera, portrait, artLayer, props.placement, props.framing);
+                frame(element, app, camera, portrait, artLayer, entranceCentered ? [0, 0, 1] : props.placement, props.framing);
         };
 
         reframe = resize;
         resize();
+
         observer = new ResizeObserver(resize);
         observer.observe(element);
+
         loading.value = false;
     }
     catch (error)
@@ -455,6 +492,10 @@ function destroyView() {
 
     session?.destroy();
     session = undefined;
+
+    entranceAssets?.release();
+    entranceAssets = undefined;
+    entranceCentered = false;
 
     activeArtLayer?.destroy({ children: true });
     activeArtLayer = undefined;
