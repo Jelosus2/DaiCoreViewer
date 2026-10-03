@@ -378,6 +378,9 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
         },
         triggerByIndex(index: number) {
             return interactions?.triggerByIndex(index, true) ?? false
+        },
+        isIdle(): boolean {
+            return interactions?.isIdle() ?? false;
         }
     };
 }

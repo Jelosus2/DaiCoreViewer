@@ -1,27 +1,17 @@
+import { loadSpineUiIndex, preloadUiImages } from "./uiAssets";
+
 const BUNDLE = "prefabs_uis_spine_30180_skin_machairodus05a_spine";
 const BACKGROUNDS = [
     ["textures_bigs_uis_spineui_1", "bg_01_01"],
     ["textures_bigs_uis_spineui_2", "bg_01_02"]
 ] as const;
 
-interface UiAssetIndex {
-    schemaVersion: number;
-    bundles: Record<string, {
-        sprites: Record<string, string>;
-        textures: Record<string, string>;
-    }>;
-}
-
 export async function loadMachairodusAssets(): Promise<{
     sprites: Record<string, string>;
     backgrounds: [string, string];
     effects: [string, string];
 }> {
-    const response = await fetch(`${import.meta.env.BASE_URL}assets/spine/ui/ui-assets.json`);
-    if (!response.ok)
-        throw new Error(`Spine UI index request failed: ${response.status}`);
-
-    const index = (await response.json()) as UiAssetIndex;
+    const index = await loadSpineUiIndex();
     const sprites = index.schemaVersion === 1 ? index.bundles[BUNDLE]?.sprites : undefined;
 
     if (!sprites)
@@ -51,12 +41,7 @@ export async function loadMachairodusAssets(): Promise<{
             throw new Error(`Machairodus UI sprite ${name} is missing`);
     }
 
-    await Promise.all(Object.values(sprites).map(async (url) => {
-        const image = new Image();
-        image.src = url;
-
-        await image.decode();
-    }));
+    await preloadUiImages(Object.values(sprites));
 
     return {
         sprites,

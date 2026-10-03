@@ -780,6 +780,7 @@ export function createSpineInteractions(
     spine.state.addListener(eventListener);
 
     return {
+        isIdle,
         triggerByIndex(index: number, forced = false) {
             const action = actionsByIndex.get(index);
             return action ? trigger(action, false, forced) : false;

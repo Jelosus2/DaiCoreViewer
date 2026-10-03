@@ -2,9 +2,11 @@
 import type { SpineRoot, SpinePlacement, SpineFraming, SpineActionConfig, SpineActionTarget, SpineRender } from "@/types/spine";
 
 import MachairodusMinigame from "./minigames/MachairodusMinigame.vue";
+import VodkaMinigame from "./minigames/VodkaMinigame.vue";
 
 import { createSpineTransitionSession } from "@/spine/createSpineTransitionSession";
 import { loadMachairodusAssets } from "@/minigames/machairodusAssets";
+import { loadVodkaAssets } from "@/minigames/vodkaAssets.ts";
 import { targetWidth, targetHeight, type MachairodusTargetView } from "@/minigames/machairodusMotion.ts";
 import { createMachairodusSpark } from "@/minigames/machairodusEffects.ts";
 import { acquireEntranceEffects, entranceTextureUrls } from "@/spine/playSpineEntrance.ts";
@@ -30,6 +32,8 @@ const errorMessage = ref("");
 const zoom = ref(1);
 const machairodusOpen = ref(false);
 const machairodusSprites = ref<Record<string, string> | null>(null);
+const vodkaOpen = ref(false);
+const vodkaSprites = ref<Record<string, string> | null>(null);
 
 const settingsStore = useSettingsStore();
 
@@ -39,6 +43,7 @@ const loadedPages = new Set<string>();
 const pendingLoads = new Set<Promise<void>>();
 const viewOffset = { x: 0, y: 0 };
 const hasMachairodusMinigame = props.interaction?.id === 3018005 && props.render.l2dName === "30180_skin_Machairodus05a_spine";
+const hasVodkaMinigame = props.interaction?.id === 7501003 && props.render.l2dName === "75010_skin_VodkaMirror03_spine";
 const targetSprites = new Map<number, Sprite>();
 const targetEffects = new Map<number, ReturnType<typeof createMachairodusSpark>>();
 
@@ -175,6 +180,15 @@ async function setup() {
             return;
         }
 
+        if (hasVodkaMinigame && !disposed)
+        {
+            const sprites = await loadVodkaAssets();
+            if (disposed)
+                return;
+
+            vodkaSprites.value = sprites;
+        }
+
         entranceAssets = acquireEntranceEffects();
         const entranceEffects = await entranceAssets.ready;
 
@@ -247,10 +261,11 @@ async function setup() {
             onError: (error) => {
                 errorMessage.value = error instanceof Error ? error.message : String(error);
             },
-            onSpineUIChange: hasMachairodusMinigame
+            onSpineUIChange: hasMachairodusMinigame || hasVodkaMinigame
                 ? (open) => {
-                    machairodusOpen.value = open;
-                    backgroundLayer.visible = open;
+                    machairodusOpen.value = hasMachairodusMinigame && open;
+                    backgroundLayer.visible = hasMachairodusMinigame && open;
+                    vodkaOpen.value = hasVodkaMinigame && open;
 
                     if (open)
                         resetZoom();
@@ -280,7 +295,7 @@ async function setup() {
 
         const resize = () => {
             if (!disposed)
-                frame(element, app, camera, portrait, artLayer, entranceCentered ? [0, 0, 1] : props.placement, props.framing);
+                frame(element, app, camera, portrait, artLayer, entranceCentered || vodkaOpen.value ? [0, 0, 1] : props.placement, props.framing);
         };
 
         reframe = resize;
@@ -403,6 +418,10 @@ function playMinigameAction(index: number): boolean {
     return session?.triggerByIndex(index) ?? false;
 }
 
+function isMinigameIdle(): boolean {
+    return session?.isIdle() ?? false;
+}
+
 function updateMachairodusTargets(targets: MachairodusTargetView[]) {
     const layer = activeTargetLayer;
     const textures = targetTextures;
@@ -478,6 +497,9 @@ function updateMachairodusTargets(targets: MachairodusTargetView[]) {
 function destroyView() {
     machairodusOpen.value = false;
     machairodusSprites.value = null;
+
+    vodkaOpen.value = false;
+    vodkaSprites.value = null;
 
     activeTargetLayer = undefined;
     targetTextures = undefined;
@@ -588,6 +610,14 @@ onUnmounted(() => {
             :sprites="machairodusSprites"
             :play-action="playMinigameAction"
             :targets-changed="updateMachairodusTargets"
+        />
+
+        <VodkaMinigame
+            v-if="vodkaSprites"
+            :active="vodkaOpen && !loading"
+            :sprites="vodkaSprites"
+            :play-action="playMinigameAction"
+            :is-idle="isMinigameIdle"
         />
     </div>
 </template>
