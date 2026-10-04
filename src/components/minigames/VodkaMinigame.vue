@@ -1,12 +1,14 @@
 <script setup lang="ts">
+import type { MinigamePortrait } from "@/minigames/types";
+
 import { createVodkaMinigame } from "@/minigames/createVodkaMinigame";
 import { onMounted, onUnmounted, shallowRef, useId, watch } from "vue";
 
 const props = defineProps<{
     active: boolean;
     sprites: Record<string, string>;
-    playAction: (index: number) => boolean;
-    isIdle: () => boolean;
+    playAction: MinigamePortrait["playAction"];
+    isIdle: MinigamePortrait["isIdle"];
 }>();
 
 const controller = createVodkaMinigame({
@@ -27,12 +29,16 @@ watch(() => props.active, (active) => {
         stop();
 }, { flush: "sync" });
 
+function syncView() {
+    view.value = controller.snapshot();
+}
+
 function stop() {
     cancelAnimationFrame(frame);
     frame = 0;
 
     controller.stop();
-    view.value = controller.snapshot();
+    syncView();
 }
 
 function update(now: number) {
@@ -44,7 +50,7 @@ function update(now: number) {
     controller.advance((now - lastFrame) / 1000);
 
     lastFrame = now;
-    view.value = controller.snapshot();
+    syncView();
 
     if (controller.isRunning())
         frame = requestAnimationFrame(update);
@@ -54,7 +60,7 @@ function start() {
     stop();
     controller.start();
 
-    view.value = controller.snapshot();
+    syncView();
     lastFrame = performance.now();
     frame = requestAnimationFrame(update);
 }

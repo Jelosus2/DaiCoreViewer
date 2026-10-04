@@ -3,7 +3,8 @@ import type { Container, Texture } from "pixi.js";
 import type { Component } from "vue";
 
 export interface MinigamePortrait {
-    playAction: (index: number) => boolean;
+    playAction: (index: number, onComplete?: () => void) => boolean;
+    getSceneNode: (path: string) => Container | undefined;
     isIdle: () => boolean;
 }
 

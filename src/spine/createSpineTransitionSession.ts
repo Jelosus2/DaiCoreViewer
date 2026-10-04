@@ -53,6 +53,7 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
     const itemsByIndex = new Map(options.interaction?.items.map((item) => [item.index, item]));
     const waits = new Set<{ id: ReturnType<typeof setTimeout>; resolve: () => void; }>();
     const entryWaits = new Set<() => void>();
+    const sceneNodes = new Map<string, Container>();
     let interactions: ReturnType<typeof createSpineInteractions> | undefined;
     let currentRole = 1;
     let pending = false;
@@ -131,6 +132,20 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
 
         const scene = buildSpineScene(root, options.artLayer, options.cacheKeys);
         const spines = scene.spines;
+
+        sceneNodes.clear();
+
+        let paths: string[] = [];
+
+        for (const [index, node] of root.nodes.entries())
+        {
+            const path = node.parent === null
+                ? ""
+                : [paths[node.parent], node.name].filter(Boolean).join("/");
+
+            paths.push(path);
+            sceneNodes.set(path, scene.nodes[index]);
+        }
 
         for (const spine of spines)
             spine.ticker = options.ticker;
@@ -369,6 +384,8 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
                 finish();
 
             entryWaits.clear();
+            sceneNodes.clear();
+
             interactions?.destroy();
             interactions = undefined;
 
@@ -376,8 +393,11 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
             clearLayer(options.overlayLayer);
             clearLayer(options.artLayer);
         },
-        triggerByIndex(index: number) {
-            return interactions?.triggerByIndex(index, true) ?? false
+        getSceneNode(path: string): Container | undefined {
+            return destroyed ? undefined : sceneNodes.get(path);
+        },
+        triggerByIndex(index: number, onComplete?: () => void): boolean {
+            return interactions?.triggerByIndex(index, true, onComplete) ?? false
         },
         isIdle(): boolean {
             return interactions?.isIdle() ?? false;

@@ -98,7 +98,16 @@ export function useMinigameSession(options: MinigameSessionOptions) {
                 uploadTextures: (textures) => controller.signal.aborted
                     ? Promise.resolve()
                     : waitOrAbort(scene.uploadTextures(textures)),
-                playAction: (index) => !destroyed && open.value && options.playAction(index),
+                playAction: (index, onComplete) => !destroyed && open.value && options.playAction(
+                    index,
+                    onComplete
+                        ? () => {
+                            if (!destroyed && open.value)
+                                onComplete();
+                        }
+                        : undefined
+                ),
+                getSceneNode: (path) => destroyed ? undefined : options.getSceneNode(path),
                 isIdle: () => !destroyed && open.value && options.isIdle()
             }).then((created) => {
                 if (destroyed)

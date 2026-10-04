@@ -567,7 +567,7 @@ export function createSpineInteractions(
         ensureTracking();
     }
 
-    function trigger(action: ParsedSpineTap, fromPointer = false, forced = false, fromObjectRestore = false): boolean {
+    function trigger(action: ParsedSpineTap, fromPointer = false, forced = false, fromObjectRestore = false, onComplete?: () => void): boolean {
         if (action.gesture || (action.drag && !fromObjectRestore))
             return false;
 
@@ -639,6 +639,25 @@ export function createSpineInteractions(
                 options.onTransition?.(action.changeRole, entry);
             else
                 queueNext(action, entry);
+
+            if (entry && onComplete)
+            {
+                const previous = entry.listener;
+                let completed = false;
+
+                entry.listener = {
+                    ...previous,
+                    complete: (finished) => {
+                        previous?.complete?.(finished);
+
+                        if (!destroyed && !completed)
+                        {
+                            completed = true;
+                            onComplete();
+                        }
+                    }
+                };
+            }
         }
 
         clickCounts.set(action.item.index, (clickCounts.get(action.item.index) ?? 0) + 1);
@@ -781,9 +800,9 @@ export function createSpineInteractions(
 
     return {
         isIdle,
-        triggerByIndex(index: number, forced = false) {
+        triggerByIndex(index: number, forced = false, onComplete?: () => void) {
             const action = actionsByIndex.get(index);
-            return action ? trigger(action, false, forced) : false;
+            return action ? trigger(action, false, forced, false, onComplete) : false;
         },
         setEnabled(value: boolean) {
             enabled = value;

@@ -1,5 +1,5 @@
 /public/assets/spine/
-/public/data/spine-manifest.json
+/public/data/
 /node_modules/
 /dist/
 *.local

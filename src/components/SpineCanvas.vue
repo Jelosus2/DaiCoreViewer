@@ -55,7 +55,8 @@ const minigame = useMinigameSession({
             resetZoom();
         else
             reframe?.();
-    }
+    },
+    getSceneNode: (path) => session?.getSceneNode(path)
 });
 
 const minigameOverlay = minigame.overlay;
@@ -358,8 +359,8 @@ function frame(
     );
 }
 
-function playMinigameAction(index: number): boolean {
-    return session?.triggerByIndex(index) ?? false;
+function playMinigameAction(index: number, onComplete?: () => void): boolean {
+    return session?.triggerByIndex(index, onComplete) ?? false;
 }
 
 function isMinigameIdle(): boolean {

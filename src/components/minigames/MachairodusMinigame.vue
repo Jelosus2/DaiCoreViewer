@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { MachairodusTargetPhase, MachairodusTargetView } from "@/minigames/machairodusMotion";
+import type { MinigamePortrait } from "@/minigames/types";
 
 import { targetWidth, targetTilt } from "@/minigames/machairodusMotion";
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch, useId } from "vue";
@@ -7,7 +8,7 @@ import { computed, onMounted, onUnmounted, ref, shallowRef, watch, useId } from 
 const props = defineProps<{
     active: boolean;
     sprites: Record<string, string>;
-    playAction: (index: number) => boolean;
+    playAction: MinigamePortrait["playAction"];
     targetsChanged: (targets: MachairodusTargetView[]) => void;
 }>();
 
