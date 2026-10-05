@@ -35,7 +35,7 @@ interface EntranceOptions {
     skipTarget: HTMLElement;
     shouldPlay: () => boolean;
     onPlayingChange: (playing: boolean) => void;
-    onCenteredChange: (centered: boolean) => void;
+    onCenteredChange: () => void;
 }
 
 let users = 0;
@@ -128,7 +128,7 @@ export function playSpineEntrance(spines: Spine[], options: EntranceOptions): ((
             if (elapsed < 350)
                 return;
 
-            options.onCenteredChange(false);
+            options.onCenteredChange();
             removeEffect();
 
             options.wrapper.scale.set(1.1);
@@ -164,7 +164,7 @@ export function playSpineEntrance(spines: Spine[], options: EntranceOptions): ((
 
     options.wrapper.scale.set(1);
     options.onPlayingChange(true);
-    options.onCenteredChange(true);
+    options.onCenteredChange();
 
     for (const spine of candidates)
     {

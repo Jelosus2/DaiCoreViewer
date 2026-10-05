@@ -26,7 +26,6 @@ interface TransitionSessionOptions {
     onSpineUIChange?: (open: boolean) => void;
     getGamePortraitScale: () => number;
     shouldPlayEntrance?: () => boolean;
-    onEntranceChange?: (centered: boolean) => void;
     entranceEffects: EntranceEffects;
     entranceWrapper: Container;
     entranceLayer: Container;
@@ -120,7 +119,6 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
         disposeEntrance = undefined;
 
         options.hotspotLayer.visible = true;
-        options.onEntranceChange?.(false);
 
         closeSpineUI();
 
@@ -194,10 +192,7 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
                     interactions?.setEnabled(!playing);
                     options.hotspotLayer.visible = !playing;
                 },
-                onCenteredChange: (centered) => {
-                    options.onEntranceChange?.(centered);
-                    options.onSceneChanged();
-                }
+                onCenteredChange: () => options.onSceneChanged()
             });
         }
 

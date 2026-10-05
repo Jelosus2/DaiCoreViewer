@@ -36,7 +36,7 @@ export async function loadMelodyAssets(): Promise<{ ui: MelodyUi; images: Melody
     if (!bundle)
         throw new Error("Melody UI sprites are missing");
 
-    const response = await fetch(`${import.meta.env.BASE_URL}data/melody-ui.json`);
+    const response = await fetch(`${import.meta.env.BASE_URL}assets/spine/ui/melody-ui.json`);
     if (!response.ok)
         throw new Error(`Melody UI metadata request failed: ${response.status}`);
 

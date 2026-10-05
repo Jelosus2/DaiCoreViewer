@@ -41,7 +41,6 @@ let reframe: (() => void) | undefined;
 let activeCamera: Container | undefined;
 let session: ReturnType<typeof createSpineTransitionSession> | undefined;
 let activeArtLayer: Container | undefined;
-let entranceCentered = false;
 let entranceAssets: ReturnType<typeof acquireEntranceEffects> | undefined;
 
 const minigame = useMinigameSession({
@@ -173,9 +172,9 @@ async function setup() {
         activeArtLayer = artLayer;
 
         app.stage.addChild(camera);
-        camera.addChild(portrait, overlayLayer);
-        portrait.addChild(entranceWrapper);
-        entranceWrapper.addChild(artLayer, hotspotLayer, entranceLayer);
+        camera.addChild(entranceWrapper, overlayLayer);
+        entranceWrapper.addChild(portrait, entranceLayer);
+        portrait.addChild(artLayer, hotspotLayer);
 
         await minigame.prepare({
             camera,
@@ -208,7 +207,6 @@ async function setup() {
                 : undefined,
             getGamePortraitScale: () => props.placement?.[2] ?? 1,
             shouldPlayEntrance: () => settingsStore.claimEntranceAnimation(props.assetKey),
-            onEntranceChange: (centered) => { entranceCentered = centered; },
             entranceEffects,
             entranceWrapper,
             entranceLayer,
@@ -238,7 +236,7 @@ async function setup() {
                 camera,
                 portrait,
                 artLayer,
-                entranceCentered ? [0, 0, 1] : currentFrame.placement,
+                currentFrame.placement,
                 currentFrame.mode
             );
         };
@@ -380,7 +378,6 @@ function destroyView() {
 
     entranceAssets?.release();
     entranceAssets = undefined;
-    entranceCentered = false;
 
     activeArtLayer?.destroy({ children: true });
     activeArtLayer = undefined;
