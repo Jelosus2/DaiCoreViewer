@@ -59,6 +59,10 @@ export function buildSpineScene(root: SpineRoot, stageParent: Container, cacheKe
 
         if (node.parent === null)
         {
+            container.position.set(0, 0);
+            container.scale.set(1);
+            container.rotation = 0;
+
             if (scene)
                 throw new Error("Prefab has more than one root");
 

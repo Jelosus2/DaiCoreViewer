@@ -108,6 +108,7 @@ export function useMinigameSession(options: MinigameSessionOptions) {
                         : undefined
                 ),
                 getSceneNode: (path) => destroyed ? undefined : options.getSceneNode(path),
+                getStagedAction: (index) => destroyed || !open.value ? undefined : options.getStagedAction(index),
                 isIdle: () => !destroyed && open.value && options.isIdle()
             }).then((created) => {
                 if (destroyed)

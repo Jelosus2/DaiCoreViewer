@@ -15,6 +15,7 @@ interface StagedTap {
     duration: number;
     step: number;
     targetTime: number;
+    progress: number;
     clickTimeRemaining?: number;
 }
 
@@ -262,6 +263,7 @@ export function createSpineInteractions(
             stage.step = step;
             stageSteps.set(trackIndex, step + 1);
             stage.targetTime = points[step] * stage.duration;
+            stage.progress = points[step];
             stage.clickTimeRemaining = action.clickTime;
             stage.entry.timeScale = points[step] === 0 ? -1 : 1;
 
@@ -280,6 +282,7 @@ export function createSpineInteractions(
             duration,
             step: 0,
             targetTime: points[0] * duration,
+            progress: points[0],
             clickTimeRemaining: action.clickTime
         });
         stageSteps.set(trackIndex, 1);
@@ -772,6 +775,7 @@ export function createSpineInteractions(
 
         stages.set(trackIndex, {
             entry, action, duration, step: count - 1, targetTime,
+            progress: action.clicks[count - 1],
             clickTimeRemaining: action.clickTime
         });
 
@@ -800,6 +804,18 @@ export function createSpineInteractions(
 
     return {
         isIdle,
+        getStagedAction(index: number) {
+            if (destroyed)
+                return undefined;
+
+            const action = actionsByIndex.get(index);
+            const stage = action && stages.get(action.trackIndex);
+
+            if (!stage || spine.state.getCurrent(action.trackIndex) !== stage.entry)
+                return undefined;
+
+            return { progress: stage.progress, playing: stage.entry.timeScale !== 0 };
+        },
         triggerByIndex(index: number, forced = false, onComplete?: () => void) {
             const action = actionsByIndex.get(index);
             return action ? trigger(action, false, forced, false, onComplete) : false;

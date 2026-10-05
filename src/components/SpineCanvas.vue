@@ -55,7 +55,8 @@ const minigame = useMinigameSession({
         else
             reframe?.();
     },
-    getSceneNode: (path) => session?.getSceneNode(path)
+    getSceneNode: (path) => session?.getSceneNode(path),
+    getStagedAction: (index) => session?.getStagedAction(index)
 });
 
 const minigameOverlay = minigame.overlay;

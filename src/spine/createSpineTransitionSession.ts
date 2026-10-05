@@ -394,6 +394,9 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
         triggerByIndex(index: number, onComplete?: () => void): boolean {
             return interactions?.triggerByIndex(index, true, onComplete) ?? false
         },
+        getStagedAction(index: number) {
+            return destroyed ? undefined : interactions?.getStagedAction(index);
+        },
         isIdle(): boolean {
             return interactions?.isIdle() ?? false;
         }

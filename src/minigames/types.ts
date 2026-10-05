@@ -6,6 +6,7 @@ export interface MinigamePortrait {
     playAction: (index: number, onComplete?: () => void) => boolean;
     getSceneNode: (path: string) => Container | undefined;
     isIdle: () => boolean;
+    getStagedAction: (index: number) => { progress: number; playing: boolean; } | undefined;
 }
 
 export interface MinigameScene {
