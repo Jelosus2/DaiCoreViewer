@@ -1,6 +1,7 @@
 import type { MinigameDefinition } from "./types";
 
 import PoseidonMinigame from "@/components/minigames/PoseidonMinigame.vue";
+
 import { loadPoseidonAssets } from "./poseidonAssets";
 
 export const poseidonMinigame: MinigameDefinition = {
