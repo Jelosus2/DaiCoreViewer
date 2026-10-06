@@ -1,4 +1,4 @@
-import type { MinigameDefinition } from "./types";
+import type { MinigameDefinition } from "../types";
 
 import PoseidonMinigame from "@/components/minigames/PoseidonMinigame.vue";
 

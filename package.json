@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "type-check": "vue-tsc --build"
   },
   "dependencies": {
     "@esotericsoftware/spine-pixi-v8": "4.2.119",

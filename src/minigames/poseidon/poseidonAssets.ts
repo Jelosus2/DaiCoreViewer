@@ -1,4 +1,4 @@
-import { loadSpineUiIndex } from "./uiAssets";
+import { loadSpineUiIndex } from "../uiAssets";
 
 const BUNDLE = "prefabs_uis_spine_70030_skin_poseidon05_spine";
 

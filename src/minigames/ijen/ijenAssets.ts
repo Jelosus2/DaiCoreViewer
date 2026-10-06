@@ -1,6 +1,6 @@
 import type { IjenArrow } from "./createIjenMinigame";
 
-import { loadSpineUiIndex } from "./uiAssets";
+import { loadSpineUiIndex } from "../uiAssets";
 
 export interface IjenTransform {
     x: number;

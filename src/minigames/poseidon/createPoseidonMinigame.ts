@@ -1,4 +1,4 @@
-import type { MinigamePortrait } from "./types";
+import type { MinigamePortrait } from "../types";
 
 type Button = "left" | "right" | "confirm" | "back";
 type PoseidonOptions = Pick<MinigamePortrait, "playAction" | "isIdle" | "getStagedAction">;

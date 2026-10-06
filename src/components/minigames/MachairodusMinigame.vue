@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { MachairodusTargetPhase, MachairodusTargetView } from "@/minigames/machairodusMotion";
+import type { MachairodusTargetPhase, MachairodusTargetView } from "@/minigames/machairodus/machairodusMotion";
 import type { MinigamePortrait } from "@/minigames/types";
 
-import { targetWidth, targetTilt } from "@/minigames/machairodusMotion";
+import { targetWidth, targetTilt } from "@/minigames/machairodus/machairodusMotion";
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch, useId } from "vue";
 
 const props = defineProps<{

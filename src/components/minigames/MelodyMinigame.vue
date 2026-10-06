@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { MelodyUi, MelodyImages } from "@/minigames/melodyAssets";
+import type { MelodyUi, MelodyImages } from "@/minigames/melody/melodyAssets";
 import type { MinigamePortrait } from "@/minigames/types";
 
-import { createMelodyMinigame } from "@/minigames/createMelodyMinigame";
-import { createMelodyUiPainter } from "@/minigames/drawMelodyUi";
+import { createMelodyMinigame } from "@/minigames/melody/createMelodyMinigame";
+import { createMelodyUiPainter } from "@/minigames/melody/drawMelodyUi";
 import { onMounted, onUnmounted, shallowRef, watch } from "vue";
 
 const props = defineProps<{

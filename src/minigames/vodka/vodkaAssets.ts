@@ -1,4 +1,4 @@
-import { loadSpineUiIndex, preloadUiImages } from "./uiAssets";
+import { loadSpineUiIndex, preloadUiImages } from "../uiAssets";
 
 const BUNDLE = "prefabs_uis_spine_75010_skin_vodkamirror03_spine";
 const REQUIRED = ["1", "2", "3", "4"] as const;

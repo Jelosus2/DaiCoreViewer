@@ -1,4 +1,4 @@
-import { loadSpineUiIndex} from "./uiAssets";
+import { loadSpineUiIndex} from "../uiAssets";
 
 export interface MelodyImage {
     id: string;

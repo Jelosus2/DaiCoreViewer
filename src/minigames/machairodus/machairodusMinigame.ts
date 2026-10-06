@@ -1,4 +1,4 @@
-import type { MinigameDefinition } from "./types";
+import type { MinigameDefinition } from "../types";
 import type { MachairodusTargetView } from "./machairodusMotion";
 
 import MachairodusMinigame from "@/components/minigames/MachairodusMinigame.vue";

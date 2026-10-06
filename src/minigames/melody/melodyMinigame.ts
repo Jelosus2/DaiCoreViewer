@@ -1,4 +1,4 @@
-import type { MinigameDefinition } from "./types";
+import type { MinigameDefinition } from "../types";
 
 import MelodyMinigame from "@/components/minigames/MelodyMinigame.vue";
 

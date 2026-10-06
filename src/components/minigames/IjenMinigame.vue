@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { IjenAssets } from "@/minigames/ijenAssets";
+import type { IjenAssets } from "@/minigames/ijen/ijenAssets";
 import type { MinigamePortrait } from "@/minigames/types";
 
-import { createIjenMinigame } from "@/minigames/createIjenMinigame";
-import { createIjenUiPainter, layoutIjenUi } from "@/minigames/drawIjenUi";
+import { createIjenMinigame } from "@/minigames/ijen/createIjenMinigame";
+import { createIjenUiPainter, layoutIjenUi } from "@/minigames/ijen/drawIjenUi";
 import { computed, onMounted, onUnmounted, shallowRef, useTemplateRef, watch } from "vue";
 
 const props = defineProps<{

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { LycorisButton } from "@/minigames/createLycorisMinigame";
-import type { LycorisAssets } from "@/minigames/lycorisAssets";
+import type { LycorisButton } from "@/minigames/lycoris/createLycorisMinigame";
+import type { LycorisAssets } from "@/minigames/lycoris/lycorisAssets";
 import type { MinigamePortrait } from "@/minigames/types";
 
-import { createLycorisMinigame } from "@/minigames/createLycorisMinigame";
-import { createLycorisUiPainter, layoutLycorisUi } from "@/minigames/drawLycorisUi";
+import { createLycorisMinigame } from "@/minigames/lycoris/createLycorisMinigame";
+import { createLycorisUiPainter, layoutLycorisUi } from "@/minigames/lycoris/drawLycorisUi";
 import { computed, onMounted, onUnmounted, shallowRef, useTemplateRef, watch } from "vue";
 
 const props = defineProps<{

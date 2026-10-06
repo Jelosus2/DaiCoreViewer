@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MinigamePortrait } from "@/minigames/types";
 
-import { createPoseidonMinigame } from "@/minigames/createPoseidonMinigame";
+import { createPoseidonMinigame } from "@/minigames/poseidon/createPoseidonMinigame";
 import { computed, onMounted, onUnmounted, shallowRef, useTemplateRef, watch } from "vue";
 
 const props = defineProps<{

@@ -1,13 +1,11 @@
 import type { MinigameDefinition } from "./types";
 
-import { machairodusMinigame } from "./machairodusMinigame";
-import { vodkaMinigame } from "./vodkaMinigame";
-import { melodyMinigame } from "./melodyMinigame";
-import { poseidonMinigame } from "./poseidonMinigame";
-
-import { ijenMinigame } from "./ijenMinigame";
-
-import { lycorisMinigame } from "./lycorisMinigame";
+import { machairodusMinigame } from "./machairodus/machairodusMinigame";
+import { vodkaMinigame } from "./vodka/vodkaMinigame";
+import { melodyMinigame } from "./melody/melodyMinigame";
+import { poseidonMinigame } from "./poseidon/poseidonMinigame";
+import { ijenMinigame } from "./ijen/ijenMinigame";
+import { lycorisMinigame } from "./lycoris/lycorisMinigame";
 
 const minigames = [machairodusMinigame, vodkaMinigame, melodyMinigame, poseidonMinigame, ijenMinigame, lycorisMinigame];
 

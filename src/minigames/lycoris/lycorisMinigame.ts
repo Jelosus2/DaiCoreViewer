@@ -1,4 +1,4 @@
-import type { MinigameDefinition } from "./types";
+import type { MinigameDefinition } from "../types";
 
 import LycorisMinigame from "@/components/minigames/LycorisMinigame.vue";
 

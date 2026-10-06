@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MinigamePortrait } from "@/minigames/types";
 
-import { createVodkaMinigame } from "@/minigames/createVodkaMinigame";
+import { createVodkaMinigame } from "@/minigames/vodka/createVodkaMinigame";
 import { onMounted, onUnmounted, shallowRef, useId, watch } from "vue";
 
 const props = defineProps<{

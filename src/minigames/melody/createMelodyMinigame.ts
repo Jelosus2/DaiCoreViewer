@@ -1,4 +1,4 @@
-import type { MinigamePortrait } from "./types";
+import type { MinigamePortrait } from "../types";
 
 type Phase =
     | "stopped"

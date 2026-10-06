@@ -1,4 +1,4 @@
-import type { MinigamePortrait } from "./types";
+import type { MinigamePortrait } from "../types";
 
 export type LycorisButton = "left" | "right" | "fever" | "back";
 

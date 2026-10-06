@@ -1,4 +1,4 @@
-import { loadSpineUiIndex, preloadUiImages } from "./uiAssets";
+import { loadSpineUiIndex, preloadUiImages } from "../uiAssets";
 
 const BUNDLE = "prefabs_uis_spine_30180_skin_machairodus05a_spine";
 const BACKGROUNDS = [
