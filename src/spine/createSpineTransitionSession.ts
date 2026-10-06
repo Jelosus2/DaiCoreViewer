@@ -120,8 +120,6 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
 
         options.hotspotLayer.visible = true;
 
-        closeSpineUI();
-
         interactions?.destroy();
         interactions = undefined;
 
