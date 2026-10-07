@@ -6,7 +6,6 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
         characters: [],
         asmr: [],
         archives: [],
-        actions: [],
         ungrouped: [],
         other: []
     };
@@ -65,33 +64,6 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
             interaction: item.interaction,
             render: item.render
         }]));
-    }
-
-    for (const action of manifest.special?.actionTransitions ?? [])
-    {
-        const related = modelIndex.get(action.id);
-        const name = related
-            ? `${related.characterName} · ${related.model.skinName?.english ?? related.model.render.l2dName}`
-            : `Action ${action.id}`;
-
-        // Some action tables repeat the same target. Show each render once.
-        const targets = [...new Map(action.targets.map((target) => [target.l2dName, target])).values()];
-        const placement = related?.model.l2dPos
-            ?? manifest.ungroupedModels[String(action.id)]?.l2dPos
-            ?? manifest.archivePictures[String(action.id)]?.l2dPos;
-
-        const options = targets.map((target, index) => ({
-            id: String(index),
-            label: target.l2dName,
-            placement,
-            render: target.render
-        }));
-
-        const kind = action.table.includes("MultiImage")
-            ? "Multi-image action"
-            : "Spine action";
-
-        addIfReady(catalog.actions, makeItem(`${action.table}:${action.id}`, name, `${kind} · ${action.id}`, options, [action.table]));
     }
 
     for (const model of Object.values(manifest.ungroupedModels))

@@ -4,7 +4,6 @@ export const viewerCategories = [
     { id: "characters", label: "Characters" },
     { id: "asmr", label: "ASMR" },
     { id: "archives", label: "Archives" },
-    { id: "actions", label: "Actions" },
     { id: "ungrouped", label: "Ungrouped" },
     { id: "other", label: "Other" }
 ] as const;
