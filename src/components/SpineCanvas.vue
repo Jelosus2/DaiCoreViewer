@@ -5,6 +5,7 @@ import { createSpineTransitionSession } from "@/spine/createSpineTransitionSessi
 import { acquireEntranceEffects, entranceTextureUrls } from "@/spine/playSpineEntrance.ts";
 import { useMinigameSession } from "@/minigames/useMinigameSession";
 import { useSettingsStore } from "@/stores/settingsStore.ts";
+import { useCanvasPan } from "@/composables/useCanvasPan";
 import { Application, Assets, Cache, Container, Texture } from "pixi.js";
 import { onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import "pixi.js/prepare";
@@ -61,6 +62,25 @@ const minigame = useMinigameSession({
 
 const minigameOverlay = minigame.overlay;
 const minigameOpen = minigame.open;
+
+const {
+    panMode,
+    panning,
+    togglePanMode,
+    stopPan,
+    onPanPointerDown,
+    onPanLostPointerCapture,
+    onPanAuxClick
+} = useCanvasPan({
+    host,
+    canPan: () => !loading.value && !errorMessage.value && !minigameOpen.value && activeCamera !== undefined,
+    move: (deltaX, deltaY) => {
+        viewOffset.x += deltaX;
+        viewOffset.y += deltaY;
+
+        activeCamera?.position.set(activeCamera.position.x + deltaX, activeCamera.position.y + deltaY);
+    }
+});
 
 watch([() => props.framing, () => props.placement], resetZoom);
 
@@ -280,6 +300,8 @@ function loadTrackedAsset<T>(url: string): Promise<T> {
 }
 
 function resetZoom() {
+    stopPan();
+
     zoom.value = 1;
     viewOffset.x = 0;
     viewOffset.y = 0;
@@ -367,6 +389,7 @@ function isMinigameIdle(): boolean {
 }
 
 function destroyView() {
+    stopPan();
     minigame.destroy();
 
     reframe = undefined;
@@ -424,13 +447,36 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div class="relative" @wheel.prevent="onWheel">
-        <div ref="host" class="h-full w-full"></div>
+    <div
+        class="relative"
+        @wheel.prevent="onWheel"
+        @pointerdown.capture="onPanPointerDown"
+        @auxclick.capture="onPanAuxClick"
+        @lostpointercapture="onPanLostPointerCapture"
+    >
+        <div
+            ref="host"
+            class="h-full w-full"
+            :class="{
+                'pan-enabled': panMode,
+                'is-panning': panning
+            }"
+        ></div>
 
         <div
             v-if="!loading && !errorMessage"
             class="absolute bottom-3 right-3 flex overflow-hidden rounded-lg border border-line bg-control shadow-lg"
         >
+            <button
+                type="button"
+                aria-label="Pan view"
+                :aria-pressed="panMode"
+                :disabled="minigameOpen"
+                title="Turn Pan on to drag the view with one finger or the left mouse button."
+                :class="panMode ? 'bg-selected text-white' : ''"
+                class="border-r border-line px-3 py-2 text-sm hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                @click="togglePanMode"
+            >Pan</button>
             <button
                 type="button"
                 aria-label="Zoom out"
@@ -439,7 +485,8 @@ onUnmounted(() => {
             >−</button>
             <button
                 type="button"
-                aria-label="Reset zoom"
+                aria-label="Reset zoom and position"
+                title="Click to reset zoom and position. Drag with the middle mouse button to pan outside minigames."
                 class="border-x border-line px-3 py-2 text-sm hover:bg-hover"
                 @click="resetZoom"
             >{{ Math.round(zoom * 100) }}%</button>
@@ -473,3 +520,17 @@ onUnmounted(() => {
         />
     </div>
 </template>
+
+<style scoped>
+.pan-enabled,
+.pan-enabled :deep(canvas) {
+    cursor: grab !important;
+    touch-action: none;
+    user-select: none;
+}
+
+.is-panning,
+.is-panning :deep(canvas) {
+    cursor: grabbing !important;
+}
+</style>
