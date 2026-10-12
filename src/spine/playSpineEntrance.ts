@@ -36,6 +36,7 @@ interface EntranceOptions {
     shouldPlay: () => boolean;
     onPlayingChange: (playing: boolean) => void;
     onCenteredChange: () => void;
+    onStarted?: () => void;
 }
 
 let users = 0;
@@ -192,6 +193,7 @@ export function playSpineEntrance(spines: Spine[], options: EntranceOptions): ((
         spine.update(0);
     }
 
+    options.onStarted?.();
     options.ticker.add(update, undefined, -10);
     options.skipTarget.addEventListener("pointerdown", skip);
 

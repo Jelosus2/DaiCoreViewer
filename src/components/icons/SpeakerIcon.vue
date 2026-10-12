@@ -1,0 +1,17 @@
+<script setup lang="ts">
+defineProps<{
+    muted: boolean;
+}>();
+</script>
+
+<template>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 4 6 8H3v8h3l5 4z" />
+        <template v-if="muted">
+            <path d="m16 9 5 6m0-6-5 6" />
+        </template>
+        <template v-else>
+            <path d="M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14" />
+        </template>
+    </svg>
+</template>

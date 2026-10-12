@@ -23,7 +23,7 @@ export function useMinigameSession(options: MinigameSessionOptions) {
     let preparing: Promise<void> | undefined;
     let destroyed = false;
 
-    function waitOrAbort(task: Promise<unknown>): Promise<void> {
+    function waitOrAbort(task: Promise<unknown>) {
         const signal = controller.signal;
 
         if (signal.aborted)
@@ -32,7 +32,7 @@ export function useMinigameSession(options: MinigameSessionOptions) {
             return Promise.resolve();
         }
 
-        return new Promise((resolve, reject) => {
+        return new Promise<void>((resolve, reject) => {
             const finish = () => {
                 signal.removeEventListener("abort", finish);
                 resolve();
@@ -79,7 +79,7 @@ export function useMinigameSession(options: MinigameSessionOptions) {
         overlay,
         setOpen,
         destroy,
-        prepare(scene: MinigameScene): Promise<void> {
+        prepare(scene: MinigameScene) {
             if (destroyed || !definition)
                 return Promise.resolve();
 

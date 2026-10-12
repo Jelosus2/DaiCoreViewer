@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { SpineRoot, SpinePlacement, SpineFraming, SpineActionConfig, SpineActionTarget, SpineRender } from "@/types/spine";
 
+import AudioControls from "./AudioControls.vue";
+
+import { createAssetAudioSession } from "@/audio/createAssetAudioSession";
 import { createSpineTransitionSession } from "@/spine/createSpineTransitionSession";
 import { acquireEntranceEffects, entranceTextureUrls } from "@/spine/playSpineEntrance.ts";
 import { useMinigameSession } from "@/minigames/useMinigameSession";
@@ -19,11 +22,17 @@ const props = defineProps<{
     transitionTargets?: SpineActionTarget[];
     showHotspots: boolean;
     assetKey: string;
+    audioAssetKey?: string;
+    catalogSha256: string;
 }>();
 
 const host = useTemplateRef<HTMLDivElement>("host");
 const loading = ref(true);
 const errorMessage = ref("");
+const loadingMessage = ref("Loading Spine assets...");
+const audioMessage = ref("");
+const audioBlocked = ref(false);
+const caption = ref("");
 const zoom = ref(1);
 
 const settingsStore = useSettingsStore();
@@ -82,11 +91,30 @@ const {
     }
 });
 
+const audio = createAssetAudioSession({
+    assetKey: props.audioAssetKey,
+    catalogSha256: props.catalogSha256,
+    baseUrl: import.meta.env.BASE_URL,
+    volume: () => settingsStore.audioVolume,
+    captions: () => settingsStore.audioCaptions,
+    onProgress: (completed, total) => {
+        loadingMessage.value = total > 0
+            ? `Loading audio files... ${completed}/${total}`
+            : "Loading audio files...";
+    },
+    onCaption: (text) => { caption.value = text; },
+    onBlocked: (blocked) => { audioBlocked.value = blocked; }
+});
+
 watch([() => props.framing, () => props.placement], resetZoom);
 
 watch(() => props.showHotspots, (show) => {
     session?.setDebugVisible(show);
 });
+
+watch(() => [settingsStore.audioVolume, settingsStore.audioCaptions], () => {
+    audio.refreshSettings();
+}, { flush: "sync" });
 
 async function loadRoot(root: SpineRoot) {
     const spines = root.nodes.flatMap((node) => node.spines);
@@ -223,6 +251,7 @@ async function setup() {
             onError: (error) => {
                 errorMessage.value = error instanceof Error ? error.message : String(error);
             },
+            onActionStart: audio.playAction,
             onSpineUIChange: minigame.supported
                 ? minigame.setOpen
                 : undefined,
@@ -240,6 +269,29 @@ async function setup() {
             await releaseAssets();
             return;
         }
+
+        if (props.audioAssetKey)
+        {
+            loadingMessage.value = "Loading audio files...";
+
+            try
+            {
+                await audio.prepare();
+            }
+            catch (error)
+            {
+                audio.destroy();
+
+                if (!disposed)
+                {
+                    audioMessage.value = "Audio unavailable. Reload this asset to try again.";
+                    console.error("Failed to prepare audio:", error);
+                }
+            }
+        }
+
+        if (disposed)
+            return;
 
         session.mountInitial();
 
@@ -291,7 +343,7 @@ function loadTrackedAsset<T>(url: string): Promise<T> {
         return asset;
     });
 
-    const settled: Promise<void> = request.then(() => {}, () => {});
+    const settled = request.then(() => {}, () => {});
 
     pendingLoads.add(settled);
     void settled.then(() => pendingLoads.delete(settled));
@@ -389,6 +441,7 @@ function isMinigameIdle(): boolean {
 }
 
 function destroyView() {
+    audio.destroy();
     stopPan();
     minigame.destroy();
 
@@ -418,6 +471,16 @@ function destroyView() {
     }
 
     activeCamera = undefined;
+}
+
+function onPointerDown(event: PointerEvent) {
+    if (event.target instanceof Element && event.target.closest("[data-audio-controls]"))
+        return;
+
+    if (!loading.value)
+        void audio.unlock();
+
+    onPanPointerDown(event);
 }
 
 function onWheel(event: WheelEvent) {
@@ -450,7 +513,7 @@ onUnmounted(() => {
     <div
         class="relative"
         @wheel.prevent="onWheel"
-        @pointerdown.capture="onPanPointerDown"
+        @pointerdown.capture="onPointerDown"
         @auxclick.capture="onPanAuxClick"
         @lostpointercapture="onPanLostPointerCapture"
     >
@@ -498,11 +561,30 @@ onUnmounted(() => {
             >+</button>
         </div>
 
+        <AudioControls
+            v-if="props.audioAssetKey && !loading && !errorMessage && !audioMessage"
+            v-model:volume="settingsStore.audioVolume"
+            v-model:captions="settingsStore.audioCaptions"
+            :blocked="audioBlocked"
+            @unlock="audio.unlock"
+        />
+        <p
+            v-if="audioMessage && !loading && !errorMessage"
+            role="status"
+            class="absolute left-3 top-3 rounded bg-control px-3 py-2 text-sm text-muted"
+        >{{ audioMessage }}</p>
+        <p
+            v-if="caption && !loading && !errorMessage"
+            class="pointer-events-none absolute bottom-16 left-1/2 w-[90%] -translate-x-1/2 rounded bg-black/70 px-4 py-2 text-center text-sm text-white"
+        >{{ caption }}</p>
+
         <p
             v-if="loading"
+            role="status"
+            aria-live="polite"
             class="absolute inset-0 grid place-items-center text-muted"
         >
-            Loading Spine assets...
+            {{ loadingMessage }}
         </p>
         <p
             v-else-if="errorMessage"

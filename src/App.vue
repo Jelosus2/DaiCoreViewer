@@ -14,6 +14,7 @@ import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import { storeToRefs } from "pinia";
 
 const manifest = shallowRef<SpineManifest | null>(null);
+const catalogSha256 = ref("");
 const category = ref<ViewerCategory>("characters");
 const framing = ref<SpineFraming>("game");
 const selectedItemId = ref<string | null>(null);
@@ -31,6 +32,21 @@ const catalog = computed(() => buildSpineCatalog(manifest.value));
 const items = computed(() => catalog.value[category.value]);
 const selectedItem = computed(() => items.value.find((item) => item.id === selectedItemId.value));
 const selectedOption = computed(() => selectedItem.value?.options.find((option) => option.id === selectedOptionId.value));
+const audioAssetKey = computed(() => {
+    const id = selectedOption.value?.id;
+    if (!id)
+        return undefined;
+
+    if (category.value === "characters" || category.value === "ungrouped")
+        return `model:${id}`;
+    if (category.value === "archives")
+        return `archive:${id}`;
+    if (category.value === "asmr")
+        return `asmr:${id}`;
+
+    return undefined;
+});
+
 const transitionTargets = computed(() => {
     const option = selectedOption.value;
     if (!option || !manifest.value?.special)
@@ -90,7 +106,15 @@ onMounted(async () => {
         if (!response.ok)
             throw new Error(`Manifest request failed: ${response.status}`);
 
-        const data = (await response.json()) as SpineManifest;
+        const bytes = await response.arrayBuffer();
+        const data = JSON.parse(new TextDecoder().decode(bytes)) as SpineManifest;
+
+        if (crypto.subtle)
+        {
+            const digest = await crypto.subtle.digest("SHA-256", bytes);
+            catalogSha256.value = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+        }
+
         if (data.schemaVersion !== 1)
             throw new Error("Unsupported Spine manifest version");
 
@@ -202,6 +226,8 @@ onUnmounted(() => controller.abort());
                     :transition-targets="transitionTargets"
                     :show-hotspots="showHotspots"
                     :asset-key="`${category}:${selectedItemId}:${selectedOptionId}`"
+                    :audio-asset-key="audioAssetKey"
+                    :catalog-sha256="catalogSha256"
                     class="mt-5 h-[60vh] min-h-80 overflow-hidden rounded-xl border border-line bg-stage lg:min-h-0 lg:flex-1"
                 />
                 <div

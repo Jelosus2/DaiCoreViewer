@@ -36,6 +36,7 @@ interface SpineInteractionOptions {
     canTransition?: (transition: SpineRoleTransition) => boolean;
     onTransition?: (transition: SpineRoleTransition, entry?: TrackEntry) => void;
     onSpineUI?: () => void;
+    onActionStart?: (item: SpineActionItem, recordPosition?: number) => void;
 }
 
 export interface SpineInteractionState {
@@ -268,6 +269,8 @@ export function createSpineInteractions(
             stage.entry.timeScale = points[step] === 0 ? -1 : 1;
 
             applyActivation(action, step % 2 === 1)
+            options.onActionStart?.(action.item, step + 1);
+
             return true;
         }
 
@@ -286,6 +289,7 @@ export function createSpineInteractions(
             clickTimeRemaining: action.clickTime
         });
         stageSteps.set(trackIndex, 1);
+        options.onActionStart?.(action.item, 1);
 
         applyActivation(action, false);
         ensureTracking();
@@ -293,13 +297,13 @@ export function createSpineInteractions(
         return true;
     }
 
-    function chooseAnimation(action: ParsedSpineTap): string | undefined {
+    function chooseAnimation(action: ParsedSpineTap): { name: string; position: number } | undefined {
         if (action.orderActions)
         {
             const position = orderPositions.get(action.item.index) ?? 0;
             orderPositions.set(action.item.index, (position + 1) % action.orderActions.length);
 
-            return action.orderActions[position];
+            return { name: action.orderActions[position], position: position + 1 };
         }
 
         if (action.randomActions)
@@ -307,17 +311,18 @@ export function createSpineInteractions(
             const total = action.randomActions.reduce((sum, choice) => sum + choice.weight, 0);
             let pick = Math.random() * total;
 
-            for (const choice of action.randomActions)
+            for (const [index, choice] of action.randomActions.entries())
             {
                 pick -= choice.weight;
                 if (pick < 0)
-                    return choice.animation;
+                    return { name: choice.animation, position: index + 1 };
             }
 
-            return action.randomActions.at(-1)!.animation;
+            return { name: action.randomActions.at(-1)!.animation, position: action.randomActions.length };
         }
 
-        return action.animationNames[0];
+        const name = action.animationNames[0];
+        return name ? { name, position: 1 } : undefined;
     }
 
     function isIdle(): boolean {
@@ -558,9 +563,11 @@ export function createSpineInteractions(
         });
 
         ensureTracking();
+        options.onActionStart?.(action.item, 1);
     }
 
-    function playDragAnimation(trackIndex: number, name: string) {
+    function playDragAnimation(action: ParsedSpineTap, name: string) {
+        const trackIndex = action.trackIndex;
         const entry = spine.state.setAnimation(trackIndex, name, false);
         entry.alpha = 0;
         entry.mixDuration = 0.2;
@@ -568,6 +575,7 @@ export function createSpineInteractions(
         spine.state.addEmptyAnimation(trackIndex, 0.5, 0);
         fadingEntries.set(trackIndex, entry);
         ensureTracking();
+        options.onActionStart?.(action.item, 1);
     }
 
     function trigger(action: ParsedSpineTap, fromPointer = false, forced = false, fromObjectRestore = false, onComplete?: () => void): boolean {
@@ -582,7 +590,7 @@ export function createSpineInteractions(
         {
             const name = action.animationNames[0];
             if (name)
-                playDragAnimation(action.trackIndex, name);
+                playDragAnimation(action, name);
 
             clickCounts.set(action.item.index, (clickCounts.get(action.item.index) ?? 0) + 1);
 
@@ -605,7 +613,9 @@ export function createSpineInteractions(
         }
         else
         {
-            const animationName = chooseAnimation(action);
+            const chosen = chooseAnimation(action);
+            const animationName = chosen?.name;
+
             stages.delete(action.trackIndex);
             stageSteps.delete(action.trackIndex);
 
@@ -634,6 +644,9 @@ export function createSpineInteractions(
                 if (action.guochange)
                     spine.state.addEmptyAnimation(action.trackIndex, 0.5, 0);
             }
+
+            if (entry)
+                options.onActionStart?.(action.item, chosen?.position ?? 1);
 
             applyActivation(action, false);
             scheduleIdle(action);
@@ -713,10 +726,11 @@ export function createSpineInteractions(
                 () => enabled && !destroyed && !gestureActive && hitbox.visible && isIdle(),
                 () => {
                     gestureActive = true;
+                    options.onActionStart?.(action.item, 1);
                     clickCounts.set(action.item.index, (clickCounts.get(action.item.index) ?? 0) + 1);
                 },
                 () => { gestureActive = false },
-                (animation) => playDragAnimation(action.trackIndex, animation),
+                (animation) => playDragAnimation(action, animation),
                 () => { trigger(action, true, false, true); }
             ));
         }
@@ -729,6 +743,7 @@ export function createSpineInteractions(
                 () => enabled && !destroyed && !gestureActive && hitbox.visible && isIdle() && !recoveringGestureTracks.has(action.trackIndex),
                 () => {
                     gestureActive = true;
+                    options.onActionStart?.(action.item, 1);
                     clickCounts.set(action.item.index, (clickCounts.get(action.item.index) ?? 0) + 1);
                 },
                 () => { gestureActive = false; },

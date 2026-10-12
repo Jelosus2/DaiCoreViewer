@@ -24,6 +24,7 @@ interface TransitionSessionOptions {
     onSceneChanged: () => void;
     onError: (error: unknown) => void;
     onSpineUIChange?: (open: boolean) => void;
+    onActionStart?: (item: SpineActionItem, recordPosition?: number) => void;
     getGamePortraitScale: () => number;
     shouldPlayEntrance?: () => boolean;
     entranceEffects: EntranceEffects;
@@ -61,11 +62,11 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
     let spineUIOpen = false;
     let disposeEntrance: (() => void) | undefined;
 
-    function wait(ms: number): Promise<void> {
+    function wait(ms: number) {
         if (destroyed || ms <= 0)
             return Promise.resolve();
 
-        return new Promise((resolve) => {
+        return new Promise<void>((resolve) => {
             const timer = { id: undefined as unknown as ReturnType<typeof setTimeout>, resolve };
 
             timer.id = setTimeout(() => {
@@ -96,7 +97,7 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
         return roots.has(rule.target) && (!rule.overlay || roots.has(rule.overlay));
     }
 
-    function ensureRootLoaded(name: string): Promise<void> {
+    function ensureRootLoaded(name: string) {
         const existing = rootLoads.get(name);
         if (existing)
             return existing;
@@ -171,7 +172,8 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
                 },
                 canTransition,
                 onTransition: beginTransition,
-                onSpineUI: options.onSpineUIChange ? toggleSpineUI : undefined
+                onSpineUI: options.onSpineUIChange ? toggleSpineUI : undefined,
+                onActionStart: options.onActionStart
             });
         }
 
@@ -190,7 +192,12 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
                     interactions?.setEnabled(!playing);
                     options.hotspotLayer.visible = !playing;
                 },
-                onCenteredChange: () => options.onSceneChanged()
+                onCenteredChange: () => options.onSceneChanged(),
+                onStarted: () => {
+                    const item = options.interaction?.items.find((item) => item.sName === "in");
+                    if (item)
+                        options.onActionStart?.(item, 1);
+                }
             });
         }
 
@@ -234,8 +241,8 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
         }
     }
 
-    function waitForEntry(entry: TrackEntry): Promise<void> {
-        return new Promise((resolve) => {
+    function waitForEntry(entry: TrackEntry) {
+        return new Promise<void>((resolve) => {
             const previous = entry.listener;
             let settled = false;
 
