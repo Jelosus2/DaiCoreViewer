@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { LycorisButton } from "@/minigames/lycoris/createLycorisMinigame";
 import type { LycorisAssets } from "@/minigames/lycoris/lycorisAssets";
-import type { MinigamePortrait } from "@/minigames/types";
+import type { MinigamePortrait, MinigameAudio } from "@/minigames/types";
 
 import { createLycorisMinigame } from "@/minigames/lycoris/createLycorisMinigame";
 import { createLycorisUiPainter, layoutLycorisUi } from "@/minigames/lycoris/drawLycorisUi";
@@ -10,12 +10,14 @@ import { computed, onMounted, onUnmounted, shallowRef, useTemplateRef, watch } f
 const props = defineProps<{
     active: boolean;
     assets: LycorisAssets;
+    audio: MinigameAudio;
     playAction: MinigamePortrait["playAction"];
 }>();
 
 const host = useTemplateRef<HTMLDivElement>("host");
 const canvas = useTemplateRef<HTMLCanvasElement>("canvas");
 const controller = createLycorisMinigame({
+    audio: props.audio,
     playAction: (index, onComplete) => props.playAction(index, onComplete)
 });
 
@@ -132,6 +134,13 @@ function start() {
 function press(button: LycorisButton, event?: MouseEvent) {
     if (!event || event.button === 0)
     {
+        props.audio.playButton({
+            left: "btnL",
+            right: "btnR",
+            fever: "topMask",
+            back: "btnBack"
+        }[button], button === "back" ? 500 : 1);
+
         controller.click(button, performance.now());
         syncView();
     }

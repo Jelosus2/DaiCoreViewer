@@ -130,6 +130,7 @@ export const machairodusMinigame: MinigameDefinition = {
                 component: MachairodusMinigame,
                 props: {
                     sprites: ui.sprites,
+                    audio: context.audio,
                     playAction: context.playAction,
                     targetsChanged: updateTargets
                 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MinigamePortrait } from "@/minigames/types";
+import type { MinigamePortrait, MinigameAudio } from "@/minigames/types";
 
 import { createVodkaMinigame } from "@/minigames/vodka/createVodkaMinigame";
 import { onMounted, onUnmounted, shallowRef, useId, watch } from "vue";
@@ -7,6 +7,7 @@ import { onMounted, onUnmounted, shallowRef, useId, watch } from "vue";
 const props = defineProps<{
     active: boolean;
     sprites: Record<string, string>;
+    audio: MinigameAudio;
     playAction: MinigamePortrait["playAction"];
     isIdle: MinigamePortrait["isIdle"];
 }>();
@@ -67,7 +68,10 @@ function start() {
 
 function tap(event: MouseEvent) {
     if (event.button === 0)
+    {
+        props.audio.playButton("mask", 100);
         controller.tap(performance.now());
+    }
 }
 
 onMounted(() => {

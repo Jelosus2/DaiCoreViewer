@@ -23,6 +23,7 @@ export const ijenMinigame: MinigameDefinition = {
                 component: IjenMinigame,
                 props: {
                     assets,
+                    audio: context.audio,
                     playAction: context.playAction,
                     isIdle: context.isIdle
                 }

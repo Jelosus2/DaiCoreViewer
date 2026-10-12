@@ -20,6 +20,7 @@ export const poseidonMinigame: MinigameDefinition = {
                 component: PoseidonMinigame,
                 props: {
                     image,
+                    audio: context.audio,
                     playAction: context.playAction,
                     isIdle: context.isIdle,
                     getStagedAction: context.getStagedAction

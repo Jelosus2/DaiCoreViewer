@@ -21,6 +21,7 @@ export const vodkaMinigame: MinigameDefinition = {
                 component: VodkaMinigame,
                 props: {
                     sprites,
+                    audio: context.audio,
                     playAction: context.playAction,
                     isIdle: context.isIdle
                 }

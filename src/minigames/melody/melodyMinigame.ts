@@ -63,6 +63,7 @@ export const melodyMinigame: MinigameDefinition = {
                 props: {
                     ui,
                     images,
+                    audio: context.audio,
                     setMotion,
                     playAction: context.playAction,
                     isIdle: context.isIdle

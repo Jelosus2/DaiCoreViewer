@@ -1,4 +1,4 @@
-import type { MinigamePortrait } from "../types";
+import type { MinigamePortrait, MinigameAudio } from "../types";
 
 export type LycorisButton = "left" | "right" | "fever" | "back";
 
@@ -26,8 +26,9 @@ export interface LycorisView {
     effects: Record<string, number>;
 }
 
-export function createLycorisMinigame(options: Pick<MinigamePortrait, "playAction">) {
+export function createLycorisMinigame(options: Pick<MinigamePortrait, "playAction"> & { audio: MinigameAudio }) {
     const cooldowns = new Map<LycorisButton, number>();
+    const voiceIds = [70400119, 70400120, 70400122];
     let running = false, ending = false, changing = false;
     let generation = 0, nextId = 0, age = 0, wait = 1.5, remaining = 30, combo = 0, fever = 0;
     let feverRemaining: number | null = null;
@@ -37,6 +38,9 @@ export function createLycorisMinigame(options: Pick<MinigamePortrait, "playActio
 
     const interval = () => 0.4 + Math.random() * 0.6;
     const effect = (name: string) => { effects[name] = age; };
+    const sound = (suffix: string) => options.audio.playEffect("temp/temp.acb", `LycorisRadiata_effects_${suffix}`);
+    const voice = () => options.audio.playVoice(voiceIds[Math.floor(Math.random() * voiceIds.length)]);
+
 
     function finish(index: number) {
         ending = true;
@@ -61,6 +65,8 @@ export function createLycorisMinigame(options: Pick<MinigamePortrait, "playActio
         nextLeft = nextRight = age + 8;
         clip = "interface_feverTimein";
         clipStart = age;
+
+        sound("03");
     }
 
     return {
@@ -78,6 +84,7 @@ export function createLycorisMinigame(options: Pick<MinigamePortrait, "playActio
             clipStart = 0;
 
             cooldowns.clear();
+            options.audio.playMusic("bgms/LycorisRadiata_Music_01.acb", "LycorisRadiata_Music_01");
         },
         advance(seconds: number) {
             if (!running || !Number.isFinite(seconds) || seconds < 0)
@@ -172,6 +179,9 @@ export function createLycorisMinigame(options: Pick<MinigamePortrait, "playActio
                 effect(left ? "P_Flapping1" : "P_Flapping2");
 
                 options.playAction(fever < 2 ? (left ? 6 : 7) : 8);
+                sound("02");
+                voice();
+
                 return true;
             }
 
@@ -184,6 +194,7 @@ export function createLycorisMinigame(options: Pick<MinigamePortrait, "playActio
             effect(left ? "P_Flapping1" : "P_Flapping2");
 
             options.playAction(fever === 0 ? (left ? 4 : 5) : (left ? 6 : 7));
+            sound("01");
 
             const index = notes.findIndex(note => note.lane === button && -1850 * note.age / 2 > -1385 && -1850 * note.age / 2 < -1179);
 
@@ -195,6 +206,9 @@ export function createLycorisMinigame(options: Pick<MinigamePortrait, "playActio
             {
                 notes.splice(index, 1);
                 combo++;
+
+                sound("04");
+                voice();
 
                 effect("combo");
                 effect(left ? "P_LineWave1" : "P_LineWave2");
@@ -227,6 +241,8 @@ export function createLycorisMinigame(options: Pick<MinigamePortrait, "playActio
             return running;
         },
         stop() {
+            options.audio.stopMusic();
+
             generation++;
             running = ending = changing = false;
             notes = [];

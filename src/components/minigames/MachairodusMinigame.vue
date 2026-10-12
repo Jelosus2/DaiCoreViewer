@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MachairodusTargetPhase, MachairodusTargetView } from "@/minigames/machairodus/machairodusMotion";
-import type { MinigamePortrait } from "@/minigames/types";
+import type { MinigamePortrait, MinigameAudio } from "@/minigames/types";
 
 import { targetWidth, targetTilt } from "@/minigames/machairodus/machairodusMotion";
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch, useId } from "vue";
@@ -8,6 +8,7 @@ import { computed, onMounted, onUnmounted, ref, shallowRef, watch, useId } from 
 const props = defineProps<{
     active: boolean;
     sprites: Record<string, string>;
+    audio: MinigameAudio;
     playAction: MinigamePortrait["playAction"];
     targetsChanged: (targets: MachairodusTargetView[]) => void;
 }>();
@@ -141,6 +142,9 @@ function publishTargets() {
 }
 
 function finish(manual: boolean) {
+    if (manual)
+        props.audio.playButton("btnBack");
+
     if (!running)
         return false;
 
@@ -150,9 +154,16 @@ function finish(manual: boolean) {
     const index = manual ? 63 : score.value <= 500 ? 14 : score.value <= 1000 ? 15: 16;
 
     props.playAction(index);
+    props.audio.playEffect("temp/temp.acb", "Machairodus_Effects_06");
 }
 
-function shoot(target?: Target) {
+function shoot(target?: Target, region = 0) {
+    props.audio.playButton(
+        target ? region === 0 ? "btnHead" : "btnBody" : "mask",
+        500,
+        target ? `${target.id}:${region}` : "mask"
+    );
+
     const now = elapsed;
 
     if (!running || bullets.value <= 0 || now < nextShotAt)
@@ -170,13 +181,21 @@ function shoot(target?: Target) {
     }
 
     props.playAction(10);
+    props.audio.playEffect("temp/temp.acb", "Machairodus_Effects_01");
 
     bullets.value--;
+    const previousRank = rank.value;
+
     score.value += target ? (target.gold ? 100 : 50) : 0;
     coolAt = now + (bullets.value === 0 ? 0.5 : 3);
 
     if (target)
     {
+        props.audio.playEffect("temp/temp.acb", "Machairodus_Effects_03");
+
+        if (rank.value !== previousRank)
+            props.audio.playEffect("temp/temp.acb", "Machairodus_Effects_05");
+
         targets.value = targets.value.map((item) => {
             return item.id === target.id
                 ? { ...item, phase: "exit", exitAt: now + 0.4 }
@@ -230,7 +249,11 @@ function update(now: number) {
     lastFrame = now;
 
     const time = elapsed;
+    const previousTime = remaining.value;
+
     remaining.value = Math.ceil(Math.max(0, 15 - time));
+    if (remaining.value === 5 && previousTime !== 5)
+        props.audio.playEffect("temp/temp.acb", "Machairodus_Effects_07");
 
     if (time >= 15)
     {
@@ -257,6 +280,7 @@ function update(now: number) {
         if (bullets.value <= 4 && !reloading.value)
         {
             props.playAction(11);
+            props.audio.playEffect("temp/temp.acb", "Machairodus_Effects_02");
 
             reloading.value = true;
             reloadAt = time + 1;
@@ -334,7 +358,7 @@ onUnmounted(stop);
                 fill="transparent"
                 pointer-events="all"
                 class="cursor-crosshair"
-                @pointerdown.stop.prevent="shoot(target)"
+                @pointerdown.stop.prevent="shoot(target, index)"
             />
         </g>
 

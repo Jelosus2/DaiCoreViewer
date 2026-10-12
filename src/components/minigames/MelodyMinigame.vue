@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MelodyUi, MelodyImages } from "@/minigames/melody/melodyAssets";
-import type { MinigamePortrait } from "@/minigames/types";
+import type { MinigamePortrait, MinigameAudio } from "@/minigames/types";
 
 import { createMelodyMinigame } from "@/minigames/melody/createMelodyMinigame";
 import { createMelodyUiPainter } from "@/minigames/melody/drawMelodyUi";
@@ -10,6 +10,7 @@ const props = defineProps<{
     active: boolean;
     ui: MelodyUi;
     images: MelodyImages;
+    audio: MinigameAudio;
     playAction: MinigamePortrait["playAction"];
     isIdle: MinigamePortrait["isIdle"];
     setMotion: (mode: "idle" | "in" | "out", seconds?: number) => void;
@@ -99,11 +100,13 @@ function start() {
 }
 
 function choose(index: number) {
+    props.audio.playButton(`btn${index}`);
     controller.choose(index);
     syncView();
 }
 
 function exit() {
+    props.audio.playButton("btnBack");
     controller.exit();
     syncView();
 }

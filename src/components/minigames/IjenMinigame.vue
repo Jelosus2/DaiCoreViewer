@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { IjenAssets } from "@/minigames/ijen/ijenAssets";
-import type { MinigamePortrait } from "@/minigames/types";
+import type { MinigamePortrait, MinigameAudio } from "@/minigames/types";
 
 import { createIjenMinigame } from "@/minigames/ijen/createIjenMinigame";
 import { createIjenUiPainter, layoutIjenUi } from "@/minigames/ijen/drawIjenUi";
@@ -9,6 +9,7 @@ import { computed, onMounted, onUnmounted, shallowRef, useTemplateRef, watch } f
 const props = defineProps<{
     active: boolean;
     assets: IjenAssets;
+    audio: MinigameAudio;
     playAction: MinigamePortrait["playAction"];
     isIdle: MinigamePortrait["isIdle"];
 }>();
@@ -101,6 +102,7 @@ function start() {
 function press(button: "hit" | "back", event?: MouseEvent) {
     if (!event || event.button === 0)
     {
+        props.audio.playButton(button === "hit" ? "btnHit" : "btnBack");
         controller.click(button, performance.now());
         syncView();
     }

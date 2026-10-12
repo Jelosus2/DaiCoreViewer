@@ -17,11 +17,19 @@ type PreparedClip = { buffer: AudioBuffer } | { blob: Blob };
 export function createAssetAudioSession(options: AudioSessionOptions) {
     const controller = new AbortController();
     const clips = new Map<string, PreparedClip>();
+    const effects = new Set<AudioBufferSourceNode>();
+    const buttonTimes = new Map<string, number>();
     let manifest: AudioManifest | undefined;
     let context: AudioContext | undefined;
     let gain: GainNode | undefined;
     let voice: AudioBufferSourceNode | undefined;
     let voiceText = "";
+    let music: {
+        element: HTMLAudioElement;
+        source: MediaElementAudioSourceNode;
+        url: string;
+        pending: boolean;
+    } | undefined;
     let unlocking: Promise<void> | undefined;
     let destroyed = false;
     let ready = false;
@@ -93,10 +101,10 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         gain.connect(context.destination);
         context.onstatechange = () => {
             if (!destroyed)
-                options.onBlocked(context?.state !== "running");
+                updateBlocked();
         };
 
-        options.onBlocked(context.state !== "running");
+        updateBlocked();
         refreshSettings();
 
         const pending = [...dependencies.entries()];
@@ -177,8 +185,8 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         if (!ready || destroyed || item.audioId === undefined)
             return;
 
-
         stopVoice();
+
         const ids = item.audioId;
         const keyed = Boolean(item.content?.actions || item.content?.clicks || item.content?.randomActions || item.content?.orderActions);
         let id: number | undefined;
@@ -204,6 +212,18 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
             id = ids[String(Math.floor(Math.random() * keys.length) + 1)];
         }
 
+        startVoice(id, item.hideTxt === 1);
+    }
+
+    function playVoice(id: number) {
+        if (!ready || destroyed)
+            return;
+
+        stopVoice();
+        startVoice(id, true);
+    }
+
+    function startVoice(id: number | undefined, hideText: boolean) {
         const sound = id === undefined ? undefined : manifest?.sounds[String(id)];
         const cue = sound ? manifest?.cues[sound.cue_sheet]?.[sound.cue_name] : undefined;
         const clip = cue?.url ? clips.get(cue.url) : undefined;
@@ -233,23 +253,164 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         };
 
         voice = source;
-        voiceText = item.hideTxt === 1
-            ? ""
-            : sound.script2 ?? "";
+        voiceText = hideText ? "" : sound.script2 ?? "";
 
         source.start();
         options.onCaption(options.captions() ? voiceText : "");
     }
 
+    function playEffect(bank: string, name: string) {
+        if (!ready || destroyed || !context || !gain)
+            return;
+
+        const cue = manifest?.cues[bank]?.[name];
+        const clip = cue?.url ? clips.get(cue.url) : undefined;
+
+        if (cue?.state !== "ready" || cue.profile !== "effect" || !clip || !("buffer" in clip))
+            return;
+
+        if (context.state !== "running" && !unlocking)
+        {
+            options.onBlocked(true);
+            return;
+        }
+
+        const source = context.createBufferSource();
+        source.buffer = clip.buffer;
+
+        source.connect(gain);
+        effects.add(source);
+
+        source.onended = () => {
+            effects.delete(source);
+            source.disconnect();
+        };
+
+        source.start();
+    }
+
+    function playButton(name: string, cooldownMs = 500, key = name) {
+        if (destroyed)
+            return;
+
+        const now = performance.now();
+        if (now < (buttonTimes.get(key) ?? -Infinity))
+            return;
+
+        buttonTimes.set(key, now + cooldownMs);
+
+        const button = manifest?.assets[options.assetKey ?? ""]?.extra?.buttons.find((button) => button.button === name);
+        if (button?.cue)
+            playEffect(button.bank, button.cue);
+    }
+
+    function resetButtons() {
+        buttonTimes.clear();
+    }
+
+    function updateBlocked() {
+        options.onBlocked(context?.state !== "running" || Boolean(music?.element.paused));
+    }
+
+    function startMusic() {
+        const active = music;
+        if (!active || active.pending || !active.element.paused)
+            return;
+
+        active.pending = true;
+
+        void active.element.play().then(() => {
+            if (!destroyed && music === active)
+                updateBlocked();
+        }).catch((error: unknown) => {
+            if (destroyed || music !== active)
+                return;
+
+            if (error instanceof DOMException && error.name === "NotAllowedError")
+            {
+                options.onBlocked(true);
+            }
+            else
+            {
+                console.error("Failed to play minigame music:", error);
+                stopMusic();
+            }
+        }).finally(() => {
+            active.pending = false;
+        });
+    }
+
+    function stopMusic() {
+        const previous = music;
+        music = undefined;
+
+        if (!previous)
+            return;
+
+        previous.element.onended = null;
+        previous.element.onerror = null;
+        previous.element.pause();
+        previous.element.removeAttribute("src");
+        previous.element.load();
+        previous.source.disconnect();
+        URL.revokeObjectURL(previous.url);
+
+        if (!destroyed)
+            updateBlocked();
+    }
+
+    function playMusic(bank: string, name: string) {
+        if (!ready || destroyed || !context || !gain)
+            return;
+
+        const cue = manifest?.cues[bank]?.[name];
+        const clip = cue?.url ? clips.get(cue.url) : undefined;
+
+        if (cue?.state !== "ready" || cue.profile !== "music" || !clip || !("blob" in clip))
+            return;
+
+        stopMusic();
+
+        const url = URL.createObjectURL(clip.blob);
+        const element = new Audio(url);
+        element.loop = false;
+
+        const source = context.createMediaElementSource(element);
+        source.connect(gain);
+
+        const active = { element, source, url, pending: false };
+        music = active;
+
+        element.onended = () => {
+            if (music === active)
+                stopMusic();
+        };
+
+        element.onerror = () => {
+            if (music === active)
+            {
+                console.error("Failed to load minigame music:", element.error);
+                stopMusic();
+            }
+        };
+
+        startMusic();
+    }
+
     function unlock() {
-        if (destroyed || !context || context.state === "running")
+        if (destroyed || !context)
+            return Promise.resolve();
+
+        startMusic();
+
+        if (context.state === "running")
             return Promise.resolve();
         if (unlocking)
             return unlocking;
 
         unlocking = context.resume().then(() => {
             if (!destroyed)
-                options.onBlocked(context?.state !== "running");
+                updateBlocked();
         }).catch(() => {
             if (!destroyed)
             {
@@ -282,6 +443,17 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
 
         controller.abort();
         stopVoice();
+        stopMusic();
+
+        for (const source of effects)
+        {
+            source.onended = null;
+            source.stop();
+            source.disconnect();
+        }
+
+        effects.clear();
+        buttonTimes.clear();
 
         manifest = undefined;
 
@@ -298,6 +470,12 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
     return {
         prepare,
         playAction,
+        playEffect,
+        playButton,
+        resetButtons,
+        playVoice,
+        playMusic,
+        stopMusic,
         unlock,
         refreshSettings,
         destroy

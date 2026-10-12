@@ -1,5 +1,5 @@
 import type { SpineActionConfig, SpineFraming, SpinePlacement, SpineRender} from "@/types/spine";
-import type { MinigameInstance, MinigameOverlay, MinigamePortrait, MinigameScene} from "./types";
+import type { MinigameInstance, MinigameOverlay, MinigamePortrait, MinigameScene, MinigameAudio } from "./types";
 import type { Texture } from "pixi.js";
 
 import { findMinigame } from "./registry";
@@ -8,6 +8,7 @@ import { onScopeDispose, ref, shallowRef } from "vue";
 interface MinigameSessionOptions extends MinigamePortrait {
     render: SpineRender;
     interaction?: SpineActionConfig;
+    audio: MinigameAudio;
     loadTexture: (url: string) => Promise<Texture>;
     onOpenChange: (open: boolean) => void;
 }
@@ -52,6 +53,8 @@ export function useMinigameSession(options: MinigameSessionOptions) {
             return;
 
         open.value = value;
+        if (!value)
+            options.audio.stopMusic();
 
         instance.setOpen?.(value);
         options.onOpenChange(value);
@@ -62,7 +65,9 @@ export function useMinigameSession(options: MinigameSessionOptions) {
             return;
 
         destroyed = true;
+
         controller.abort();
+        options.audio.stopMusic();
 
         open.value = false;
         overlay.value = null;
@@ -88,6 +93,25 @@ export function useMinigameSession(options: MinigameSessionOptions) {
 
             const task = definition.create({
                 ...scene,
+                audio: {
+                    playEffect: (bank, cue) => {
+                        if (!destroyed && open.value)
+                            options.audio.playEffect(bank, cue);
+                    },
+                    playButton: (name, cooldownMs, key) => {
+                        if (!destroyed && open.value)
+                            options.audio.playButton(name, cooldownMs, key);
+                    },
+                    playVoice: (id) => {
+                        if (!destroyed && open.value)
+                            options.audio.playVoice(id);
+                    },
+                    playMusic: (bank, cue) => {
+                        if (!destroyed && open.value)
+                            options.audio.playMusic(bank, cue);
+                    },
+                    stopMusic: () => options.audio.stopMusic()
+                },
                 signal: controller.signal,
                 loadTexture: (url) => {
                     if (controller.signal.aborted)

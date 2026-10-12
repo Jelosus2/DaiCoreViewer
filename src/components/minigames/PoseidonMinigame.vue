@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MinigamePortrait } from "@/minigames/types";
+import type { MinigamePortrait, MinigameAudio } from "@/minigames/types";
 
 import { createPoseidonMinigame } from "@/minigames/poseidon/createPoseidonMinigame";
 import { computed, onMounted, onUnmounted, shallowRef, useTemplateRef, watch } from "vue";
@@ -7,6 +7,7 @@ import { computed, onMounted, onUnmounted, shallowRef, useTemplateRef, watch } f
 const props = defineProps<{
     active: boolean;
     image: HTMLImageElement;
+    audio: MinigameAudio;
     playAction: MinigamePortrait["playAction"];
     isIdle: MinigamePortrait["isIdle"];
     getStagedAction: MinigamePortrait["getStagedAction"];
@@ -113,6 +114,13 @@ function start() {
 function click(button: Parameters<typeof controller.click>[0], event: MouseEvent) {
     if (event.button === 0)
     {
+        props.audio.playButton({
+            left: "btnL",
+            right: "btnR",
+            confirm: "btnOK",
+            back: "btnBack"
+        }[button]);
+
         controller.click(button, performance.now());
         syncView();
     }

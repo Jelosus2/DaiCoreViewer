@@ -23,7 +23,12 @@ export interface AudioManifest {
     schemaVersion: number;
     mode: string;
     catalogSha256: string;
-    assets: Record<string, { cues: AudioCueRef[] }>;
+    assets: Record<string, {
+        cues: AudioCueRef[];
+        extra?: {
+            buttons: Array<{ button: string; bank: string; cue: string }>;
+        };
+    }>;
     cues: Record<string, Record<string, AudioCue>>;
     sounds: Record<string, AudioSound>;
 }

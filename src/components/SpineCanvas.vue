@@ -56,14 +56,26 @@ let entranceAssets: ReturnType<typeof acquireEntranceEffects> | undefined;
 const minigame = useMinigameSession({
     render: props.render,
     interaction: props.interaction,
+    audio: {
+        playEffect: (bank, cue) => audio.playEffect(bank, cue),
+        playButton: (name, cooldownMs, key) => audio.playButton(name, cooldownMs, key),
+        playVoice: (id) => audio.playVoice(id),
+        playMusic: (bank, cue) => audio.playMusic(bank, cue),
+        stopMusic: () => audio.stopMusic()
+    },
     loadTexture: (url) => loadTrackedAsset<Texture>(url),
     playAction: playMinigameAction,
     isIdle: isMinigameIdle,
     onOpenChange: (open) => {
         if (open)
+        {
+            audio.resetButtons();
             resetZoom();
+        }
         else
+        {
             reframe?.();
+        }
     },
     getSceneNode: (path) => session?.getSceneNode(path),
     getStagedAction: (index) => session?.getStagedAction(index)

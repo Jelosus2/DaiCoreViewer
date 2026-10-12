@@ -23,6 +23,7 @@ export const lycorisMinigame: MinigameDefinition = {
                 component: LycorisMinigame,
                 props: {
                     assets,
+                    audio: context.audio,
                     playAction: context.playAction
                 }
             },
