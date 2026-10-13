@@ -25,10 +25,28 @@ export interface AudioManifest {
     catalogSha256: string;
     assets: Record<string, {
         cues: AudioCueRef[];
+        asmr?: {
+            cue_sheet2: string;
+            cue_name2: string;
+            e_anim: string;
+            voice: number;
+        };
         extra?: {
             buttons: Array<{ button: string; bank: string; cue: string }>;
         };
     }>;
     cues: Record<string, Record<string, AudioCue>>;
     sounds: Record<string, AudioSound>;
+    asmrCaptions: Record<string, {
+        arr: Array<{ time: number; word: string }>;
+    }>;
+}
+
+export interface AsmrState {
+    time: number;
+    duration: number;
+    paused: boolean;
+    ended: boolean;
+    ready: boolean;
+    blocked: boolean;
 }

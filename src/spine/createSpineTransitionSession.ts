@@ -54,6 +54,7 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
     const waits = new Set<{ id: ReturnType<typeof setTimeout>; resolve: () => void; }>();
     const entryWaits = new Set<() => void>();
     const sceneNodes = new Map<string, Container>();
+    let currentSpines: Spine[] = [];
     let interactions: ReturnType<typeof createSpineInteractions> | undefined;
     let currentRole = 1;
     let pending = false;
@@ -129,6 +130,7 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
 
         const scene = buildSpineScene(root, options.artLayer, options.cacheKeys);
         const spines = scene.spines;
+        currentSpines = spines;
 
         sceneNodes.clear();
 
@@ -392,6 +394,33 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
             clearLayer(options.hotspotLayer);
             clearLayer(options.overlayLayer);
             clearLayer(options.artLayer);
+        },
+        createAsmrSync(animation: string) {
+            const cameras = currentSpines.filter((spine) => spine.skeleton.data.findAnimation(animation));
+            if (cameras.length === 0)
+                throw new Error(`ASMR camera animation ${animation} is missing`);
+
+            const entries = cameras.map((spine) => {
+                const entry = spine.state.setAnimation(1, animation, false);
+                entry.timeScale = 0;
+                entry.mixDuration = 0;
+
+                return entry;
+            });
+
+            for (const spine of currentSpines)
+                spine.autoUpdate = false;
+
+            return (time: number, duration: number, delta: number) => {
+                if (destroyed)
+                    return;
+
+                for (const entry of entries)
+                    entry.trackTime = entry.animation!.duration * (duration > 0 ? time / duration : 0);
+
+                for (const spine of currentSpines)
+                    spine.update(delta);
+            };
         },
         getSceneNode(path: string): Container | undefined {
             return destroyed ? undefined : sceneNodes.get(path);

@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { SpineRoot, SpinePlacement, SpineFraming, SpineActionConfig, SpineActionTarget, SpineRender } from "@/types/spine";
+import type { AsmrState } from "@/types/audio.ts";
 
 import AudioControls from "./AudioControls.vue";
+import AsmrControls from "./AsmrControls.vue";
+import FullscreenIcon from "./icons/FullscreenIcon.vue";
 
 import { createAssetAudioSession } from "@/audio/createAssetAudioSession";
 import { createSpineTransitionSession } from "@/spine/createSpineTransitionSession";
@@ -26,6 +29,7 @@ const props = defineProps<{
     catalogSha256: string;
 }>();
 
+const stage = useTemplateRef<HTMLDivElement>("stage");
 const host = useTemplateRef<HTMLDivElement>("host");
 const loading = ref(true);
 const errorMessage = ref("");
@@ -34,6 +38,11 @@ const audioMessage = ref("");
 const audioBlocked = ref(false);
 const caption = ref("");
 const zoom = ref(1);
+const asmrState = ref<AsmrState>();
+const asmrControlsVisible = ref(true);
+const fullscreen = ref(false);
+const fullscreenSupported = document.fullscreenEnabled;
+const fullscreenMessage = ref("");
 
 const settingsStore = useSettingsStore();
 
@@ -42,6 +51,7 @@ const loadedAssets = new Set<string>();
 const loadedPages = new Set<string>();
 const pendingLoads = new Set<Promise<void>>();
 const viewOffset = { x: 0, y: 0 };
+const isAsmr = props.audioAssetKey?.startsWith("asmr:") ?? false;
 
 let disposed = false;
 let application: Application | undefined;
@@ -52,6 +62,11 @@ let activeCamera: Container | undefined;
 let session: ReturnType<typeof createSpineTransitionSession> | undefined;
 let activeArtLayer: Container | undefined;
 let entranceAssets: ReturnType<typeof acquireEntranceEffects> | undefined;
+let asmr: ReturnType<ReturnType<typeof createAssetAudioSession>["startAsmr"]> | undefined;
+let asmrTap: { x: number; y: number } | undefined;
+let hideAsmrControls: ReturnType<typeof setTimeout> | undefined;
+
+const updateAsmr = () => asmr?.update();
 
 const minigame = useMinigameSession({
     render: props.render,
@@ -127,6 +142,14 @@ watch(() => props.showHotspots, (show) => {
 watch(() => [settingsStore.audioVolume, settingsStore.audioCaptions], () => {
     audio.refreshSettings();
 }, { flush: "sync" });
+
+watch([
+    () => asmrState.value?.paused,
+    () => asmrState.value?.blocked,
+    () => asmrState.value?.ready,
+    () => asmrState.value?.ended,
+    () => panMode.value
+], revealAsmrControls);
 
 async function loadRoot(root: SpineRoot) {
     const spines = root.nodes.flatMap((node) => node.spines);
@@ -268,7 +291,7 @@ async function setup() {
                 ? minigame.setOpen
                 : undefined,
             getGamePortraitScale: () => props.placement?.[2] ?? 1,
-            shouldPlayEntrance: () => settingsStore.claimEntranceAnimation(props.assetKey),
+            shouldPlayEntrance: () => !isAsmr && settingsStore.claimEntranceAnimation(props.assetKey),
             entranceEffects,
             entranceWrapper,
             entranceLayer,
@@ -306,6 +329,29 @@ async function setup() {
             return;
 
         session.mountInitial();
+
+        if (isAsmr && !audioMessage.value)
+        {
+            try
+            {
+                asmr = audio.startAsmr(
+                    session.createAsmrSync,
+                    (state) => {
+                        asmrState.value = state;
+                    },
+                    (error) => {
+                        audioMessage.value = "ASMR unavailable. Reload this asset to try again.";
+                        console.error(error);
+                    }
+                );
+
+                app.ticker.add(updateAsmr);
+            }
+            catch (error)
+            {
+                audioMessage.value = error instanceof Error ? error.message : String(error);
+            }
+        }
 
         activeCamera = camera;
 
@@ -346,6 +392,24 @@ async function setup() {
 
         destroyView();
         await releaseAssets();
+    }
+}
+
+async function toggleFullscreen() {
+    const root = stage.value;
+    if (!root)
+        return;
+
+    try
+    {
+        if (document.fullscreenElement === root)
+            await document.exitFullscreen();
+        else
+            await root.requestFullscreen();
+    }
+    catch
+    {
+        fullscreenMessage.value = "Fullscreen is unavailable in this browser.";
     }
 }
 
@@ -453,7 +517,11 @@ function isMinigameIdle(): boolean {
 }
 
 function destroyView() {
+    application?.ticker.remove(updateAsmr);
     audio.destroy();
+
+    asmr = undefined;
+
     stopPan();
     minigame.destroy();
 
@@ -486,13 +554,32 @@ function destroyView() {
 }
 
 function onPointerDown(event: PointerEvent) {
-    if (event.target instanceof Element && event.target.closest("[data-audio-controls]"))
+    revealAsmrControls();
+
+    if (event.target instanceof Element && event.target.closest("[data-audio-controls], [data-canvas-controls]"))
         return;
 
-    if (!loading.value)
+    if (!loading.value && !isAsmr)
         void audio.unlock();
 
+    asmrTap = isAsmr && event.isPrimary && event.button === 0 && !panMode.value && event.target instanceof HTMLCanvasElement
+        ? { x: event.clientX, y: event.clientY }
+        : undefined;
+
     onPanPointerDown(event);
+}
+
+function toggleAsmr() {
+    asmr?.toggle();
+    void audio.unlock();
+}
+
+function onAsmrClick(event: MouseEvent) {
+    const tap = asmrTap;
+    asmrTap = undefined;
+
+    if (tap && event.target instanceof HTMLCanvasElement && !panMode.value && Math.hypot(event.clientX - tap.x, event.clientY - tap.y) < 6)
+        toggleAsmr();
 }
 
 function onWheel(event: WheelEvent) {
@@ -510,12 +597,45 @@ function onWheel(event: WheelEvent) {
     );
 }
 
+function revealAsmrControls() {
+    if (!isAsmr || disposed)
+        return;
+
+    clearTimeout(hideAsmrControls);
+    asmrControlsVisible.value = true;
+
+    const state = asmrState.value;
+    if (!state?.ready || state.paused || state.blocked || state.ended || panMode.value)
+        return;
+
+    hideAsmrControls = setTimeout(() => {
+        const root = stage.value;
+        const focused = document.activeElement;
+
+        if (root?.querySelector("[data-audio-controls]:hover") || root?.contains(focused) && focused?.matches(":focus-visible"))
+            return;
+
+        asmrControlsVisible.value = false;
+    }, 2500);
+}
+
+function onFullscreenChange() {
+    fullscreen.value = document.fullscreenElement === stage.value;
+    fullscreenMessage.value = "";
+
+    revealAsmrControls();
+}
+
 onMounted(() => {
+    document.addEventListener("fullscreenchange", onFullscreenChange);
     void setup();
 });
 
 onUnmounted(() => {
     disposed = true;
+
+    clearTimeout(hideAsmrControls);
+    document.removeEventListener("fullscreenchange", onFullscreenChange);
     destroyView();
     void releaseAssets().catch(console.error);
 });
@@ -523,11 +643,20 @@ onUnmounted(() => {
 
 <template>
     <div
-        class="relative"
+        ref="stage"
+        class="canvas-stage relative"
+        :class="{
+            'asmr-stage': isAsmr,
+            'asmr-quiet': isAsmr && !asmrControlsVisible
+        }"
         @wheel.prevent="onWheel"
         @pointerdown.capture="onPointerDown"
         @auxclick.capture="onPanAuxClick"
         @lostpointercapture="onPanLostPointerCapture"
+        @pointermove="revealAsmrControls"
+        @pointerleave="revealAsmrControls"
+        @focusin="revealAsmrControls"
+        @focusout="revealAsmrControls"
     >
         <div
             ref="host"
@@ -536,11 +665,13 @@ onUnmounted(() => {
                 'pan-enabled': panMode,
                 'is-panning': panning
             }"
+            @click="onAsmrClick"
         ></div>
 
         <div
             v-if="!loading && !errorMessage"
-            class="absolute bottom-3 right-3 flex overflow-hidden rounded-lg border border-line bg-control shadow-lg"
+            :class="isAsmr ? 'asmr-chrome right-3 top-3 border-white/10 bg-black/30 backdrop-blur-md' : 'bottom-3 right-3 border-line bg-control'"
+            class="absolute flex overflow-hidden rounded-lg border shadow-lg"
         >
             <button
                 type="button"
@@ -573,13 +704,44 @@ onUnmounted(() => {
             >+</button>
         </div>
 
+        <button
+            v-if="!isAsmr && fullscreenSupported && !loading && !errorMessage"
+            data-canvas-controls
+            type="button"
+            :aria-label="fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+            :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'"
+            class="absolute right-3 top-3 z-30 grid size-10 place-items-center rounded-lg border border-line bg-control text-muted shadow-lg hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+            @pointerdown.stop
+            @wheel.stop
+            @click="toggleFullscreen"
+        >
+            <FullscreenIcon :fullscreen="fullscreen" class="size-5" aria-hidden="true" focusable="false" />
+        </button>
+
         <AudioControls
             v-if="props.audioAssetKey && !loading && !errorMessage && !audioMessage"
+            :class="{ 'asmr-chrome': isAsmr }"
             v-model:volume="settingsStore.audioVolume"
             v-model:captions="settingsStore.audioCaptions"
             :blocked="audioBlocked"
+            :immersive="isAsmr"
             @unlock="audio.unlock"
         />
+        <AsmrControls
+            v-if="asmrState && !loading && !errorMessage && !audioMessage"
+            :state="asmrState"
+            :fullscreen="fullscreen"
+            :fullscreen-supported="fullscreenSupported"
+            @toggle="toggleAsmr"
+            @seek="asmr?.seek"
+            @fullscreen="toggleFullscreen"
+        />
+
+        <p
+            v-if="fullscreenMessage"
+            role="status"
+            class="pointer-events-none absolute inset-x-4 top-16 z-30 text-center text-sm text-white"
+        >{{ fullscreenMessage }}</p>
         <p
             v-if="audioMessage && !loading && !errorMessage"
             role="status"
@@ -587,7 +749,10 @@ onUnmounted(() => {
         >{{ audioMessage }}</p>
         <p
             v-if="caption && !loading && !errorMessage"
-            class="pointer-events-none absolute bottom-16 left-1/2 w-[90%] -translate-x-1/2 rounded bg-black/70 px-4 py-2 text-center text-sm text-white"
+            :class="isAsmr
+                ? ['asmr-caption w-max max-w-[90%] bg-black/25 px-3 py-1.5 text-base leading-relaxed', asmrControlsVisible ? asmrState?.paused ? 'bottom-28' : 'bottom-20' : 'bottom-8']
+                : 'bottom-16 w-[90%] bg-black/70 px-4 py-2 text-sm'"
+            class="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 rounded-lg text-center text-white"
         >{{ caption }}</p>
 
         <p
@@ -626,5 +791,45 @@ onUnmounted(() => {
 .is-panning,
 .is-panning :deep(canvas) {
     cursor: grabbing !important;
+}
+
+.canvas-stage:fullscreen {
+    width: 100vw;
+    height: 100dvh;
+    min-height: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: black;
+}
+
+.canvas-stage::backdrop {
+    background: black;
+}
+
+.asmr-stage .asmr-chrome {
+    transition: opacity 200ms ease;
+}
+
+.asmr-quiet .asmr-chrome {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.asmr-quiet :deep(canvas) {
+    cursor: none;
+}
+
+.asmr-caption {
+    max-width: min(90%, 42rem);
+    text-shadow: 0 1px 4px black;
+    transition: bottom 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .asmr-stage .asmr-chrome,
+    .asmr-caption {
+        transition: none;
+    }
 }
 </style>

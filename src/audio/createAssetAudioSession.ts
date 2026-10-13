@@ -1,6 +1,8 @@
 import type { AudioCue, AudioManifest } from "@/types/audio";
 import type { SpineActionItem } from "@/types/spine";
 
+import { createAsmrPlayback } from "./createAsmrPlayback";
+
 interface AudioSessionOptions {
     assetKey?: string;
     catalogSha256: string;
@@ -30,6 +32,7 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         url: string;
         pending: boolean;
     } | undefined;
+    let asmr: ReturnType<typeof createAsmrPlayback> | undefined;
     let unlocking: Promise<void> | undefined;
     let destroyed = false;
     let ready = false;
@@ -309,6 +312,12 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
     }
 
     function updateBlocked() {
+        if (asmr)
+        {
+            asmr.update();
+            return;
+        }
+
         options.onBlocked(context?.state !== "running" || Boolean(music?.element.paused));
     }
 
@@ -397,6 +406,37 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         startMusic();
     }
 
+    function startAsmr(
+        createSync: (animation: string) => (time: number, duration: number, delta: number) => void,
+        onState: Parameters<typeof createAsmrPlayback>[0]["onState"],
+        onError: (error: unknown) => void
+    ) {
+        const cfg = manifest?.assets[options.assetKey ?? ""]?.asmr;
+        const cue = cfg ? manifest?.cues[cfg.cue_sheet2]?.[cfg.cue_name2] : undefined;
+        const clip = cue?.url ? clips.get(cue.url) : undefined;
+
+        if (!ready || destroyed || !cfg || cue?.state !== "ready" || !clip || !("blob" in clip) || !context || !gain)
+            throw new Error("Full ASMR recording is unavailable");
+
+        asmr?.destroy();
+
+        asmr = createAsmrPlayback({
+            blob: clip.blob,
+            context,
+            gain,
+            duration: cue.durationSeconds!,
+            words: manifest?.asmrCaptions[String(cfg.voice)]?.arr ?? [],
+            captions: options.captions,
+            onCaption: options.onCaption,
+            onBlocked: options.onBlocked,
+            onFrame: createSync(cfg.e_anim),
+            onState,
+            onError
+        });
+
+        return asmr;
+    }
+
     function unlock() {
         if (destroyed || !context)
             return Promise.resolve();
@@ -404,13 +444,20 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         startMusic();
 
         if (context.state === "running")
+        {
+            asmr?.resume();
             return Promise.resolve();
+        }
+
         if (unlocking)
             return unlocking;
 
         unlocking = context.resume().then(() => {
             if (!destroyed)
+            {
+                asmr?.resume();
                 updateBlocked();
+            }
         }).catch(() => {
             if (!destroyed)
             {
@@ -431,7 +478,10 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         if (gain && context)
             gain.gain.setValueAtTime(getVolume(), context.currentTime);
 
-        options.onCaption(options.captions() ? voiceText : "");
+        if (asmr)
+            asmr.update();
+        else
+            options.onCaption(options.captions() ? voiceText : "");
     }
 
     function destroy() {
@@ -442,6 +492,10 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         ready = false;
 
         controller.abort();
+
+        asmr?.destroy();
+        asmr = undefined;
+
         stopVoice();
         stopMusic();
 
@@ -476,6 +530,7 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         playVoice,
         playMusic,
         stopMusic,
+        startAsmr,
         unlock,
         refreshSettings,
         destroy

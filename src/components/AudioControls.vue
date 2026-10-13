@@ -6,6 +6,7 @@ import { nextTick, onMounted, onUnmounted, ref, useId, useTemplateRef } from "vu
 
 defineProps<{
     blocked: boolean;
+    immersive?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -82,7 +83,10 @@ onUnmounted(() => {
         @focusout="onFocusOut"
         @keydown="onKeyDown"
     >
-        <div class="flex overflow-hidden rounded-lg border border-line bg-control shadow-lg">
+        <div
+            :class="immersive ? 'border-white/10 bg-black/30 text-white backdrop-blur-md' : 'border-line bg-control'"
+            class="flex overflow-hidden rounded-lg border shadow-lg"
+        >
             <button
                 ref="volumeButton"
                 type="button"
