@@ -269,6 +269,7 @@ onUnmounted(() => {
                     :audio-asset-key="audioAssetKey"
                     :catalog-sha256="catalogSha256"
                     :audio-context="linkedAsmrContext"
+                    :foreground="!settingsOpen"
                     @asmr="openAsmr"
                 />
                 <div

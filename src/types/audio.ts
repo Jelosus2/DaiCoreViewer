@@ -17,6 +17,8 @@ export interface AudioSound {
     cue_name: string;
     script2?: string;
     script2_display?: number;
+    group?: number;
+    type?: number;
 }
 
 export interface AudioManifest {
@@ -25,6 +27,8 @@ export interface AudioManifest {
     catalogSha256: string;
     assets: Record<string, {
         cues: AudioCueRef[];
+        voiceID?: number | null;
+        base_voiceID?: number | null;
         asmr?: {
             cue_sheet2: string;
             cue_name2: string;

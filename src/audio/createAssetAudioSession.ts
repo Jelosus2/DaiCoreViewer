@@ -27,6 +27,8 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
     let gain: GainNode | undefined;
     let voice: AudioBufferSourceNode | undefined;
     let voiceText = "";
+    let touchIds: number[] = [];
+    let nextTouchAt = 0;
     let music: {
         element: HTMLAudioElement;
         source: MediaElementAudioSourceNode;
@@ -156,6 +158,15 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
             checkActive();
 
             manifest = data;
+
+            if (options.assetKey.startsWith("model:") && asset.base_voiceID === null && asset.voiceID !== null)
+            {
+                touchIds = Object.entries(data.sounds)
+                    .filter(([, sound]) => sound.group === asset.voiceID && sound.type === 10)
+                    .map(([id]) => Number(id));
+            }
+
+            nextTouchAt = performance.now() + 180000;
             ready = true;
         }
         catch (error)
@@ -179,6 +190,8 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
             previous.onended = null;
             previous.stop();
             previous.disconnect();
+
+            nextTouchAt = performance.now() + 180000;
         }
 
         voiceText = "";
@@ -219,6 +232,34 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         startVoice(id, item.hideTxt === 1);
     }
 
+    function playTouch(): boolean {
+        if (!ready || destroyed || voice || touchIds.length === 0 || !context || context.state !== "running" && !unlocking)
+            return false;
+
+        startVoice(touchIds[Math.floor(Math.random() * touchIds.length)], false);
+
+        return voice !== undefined;
+    }
+
+    function updateTouch(active: boolean) {
+        if (!ready || destroyed || touchIds.length === 0)
+            return;
+
+        const now = performance.now();
+
+        if (!active)
+        {
+            nextTouchAt = now + 180000;
+            return;
+        }
+
+        if (!voice && now > nextTouchAt)
+        {
+            nextTouchAt = now + 180000;
+            playTouch();
+        }
+    }
+
     function playVoice(id: number) {
         if (!ready || destroyed)
             return;
@@ -251,6 +292,7 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
             if (voice === source)
             {
                 voice = undefined;
+                nextTouchAt = performance.now() + 180000;
                 voiceText = "";
                 options.onCaption("");
             }
@@ -510,6 +552,7 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         effects.clear();
         buttonTimes.clear();
 
+        touchIds = [];
         manifest = undefined;
 
         clips.clear();
@@ -532,6 +575,8 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         playMusic,
         stopMusic,
         startAsmr,
+        playTouch,
+        updateTouch,
         unlock,
         refreshSettings,
         destroy

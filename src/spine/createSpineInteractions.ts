@@ -38,6 +38,7 @@ interface SpineInteractionOptions {
     onSpineUI?: () => void;
     onActionStart?: (item: SpineActionItem, recordPosition?: number) => void;
     onAsmr?: (id: number) => void;
+    onHotspotPointer?: () => void;
 }
 
 export interface SpineInteractionState {
@@ -723,6 +724,7 @@ export function createSpineInteractions(
         if (slotName)
             slotHotspots.push({ slotName, hitbox, outline });
 
+        hitbox.on("pointerdown", () => options.onHotspotPointer?.());
         hitboxes.set(action.item.index, hitbox);
 
         setActive(action.item.index, !action.initiallyHidden);

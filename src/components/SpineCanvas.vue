@@ -28,6 +28,7 @@ const props = defineProps<{
     audioAssetKey?: string;
     catalogSha256: string;
     audioContext?: AudioContext;
+    foreground: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -68,10 +69,18 @@ let session: ReturnType<typeof createSpineTransitionSession> | undefined;
 let activeArtLayer: Container | undefined;
 let entranceAssets: ReturnType<typeof acquireEntranceEffects> | undefined;
 let asmr: ReturnType<ReturnType<typeof createAssetAudioSession>["startAsmr"]> | undefined;
-let asmrTap: { x: number; y: number } | undefined;
+let canvasTap: { x: number; y: number } | undefined;
 let hideAsmrControls: ReturnType<typeof setTimeout> | undefined;
+let hotspotPointer = false;
 
 const updateAsmr = () => asmr?.update();
+const updateTouch = () => audio.updateTouch(
+    props.foreground &&
+    !loading.value &&
+    !errorMessage.value &&
+    !minigameOpen.value &&
+    document.visibilityState === "visible"
+);
 
 const minigame = useMinigameSession({
     render: props.render,
@@ -297,6 +306,9 @@ async function setup() {
                 ? minigame.setOpen
                 : undefined,
             onAsmr: (id) => emit("asmr", id),
+            onHotspotPointer: () => {
+                hotspotPointer = true;
+            },
             getGamePortraitScale: () => props.placement?.[2] ?? 1,
             shouldPlayEntrance: () => !isAsmr && settingsStore.claimEntranceAnimation(props.assetKey),
             entranceEffects,
@@ -386,6 +398,8 @@ async function setup() {
         observer.observe(element);
 
         loading.value = false;
+
+        app.ticker.add(updateTouch);
     }
     catch (error)
     {
@@ -525,6 +539,7 @@ function isMinigameIdle(): boolean {
 
 function destroyView() {
     application?.ticker.remove(updateAsmr);
+    application?.ticker.remove(updateTouch);
     audio.destroy();
 
     asmr = undefined;
@@ -569,9 +584,21 @@ function onPointerDown(event: PointerEvent) {
     if (!loading.value && !isAsmr)
         void audio.unlock();
 
-    asmrTap = isAsmr && event.isPrimary && event.button === 0 && !panMode.value && event.target instanceof HTMLCanvasElement
-        ? { x: event.clientX, y: event.clientY }
-        : undefined;
+    hotspotPointer = false;
+
+    if (
+        !loading.value && !errorMessage.value && !minigameOpen.value &&
+        event.isPrimary && event.button === 0 && !panMode.value &&
+        event.target instanceof HTMLCanvasElement &&
+        event.target.parentElement === host.value
+    )
+    {
+        canvasTap = { x: event.clientX, y: event.clientY };
+    }
+    else
+    {
+        canvasTap = undefined;
+    }
 
     onPanPointerDown(event);
 }
@@ -581,12 +608,17 @@ function toggleAsmr() {
     void audio.unlock();
 }
 
-function onAsmrClick(event: MouseEvent) {
-    const tap = asmrTap;
-    asmrTap = undefined;
+function onCanvasClick(event: MouseEvent) {
+    const tap = canvasTap;
+    canvasTap = undefined;
 
-    if (tap && event.target instanceof HTMLCanvasElement && !panMode.value && Math.hypot(event.clientX - tap.x, event.clientY - tap.y) < 6)
+    if (!tap || !(event.target instanceof HTMLCanvasElement) || panMode.value || Math.hypot(event.clientX - tap.x, event.clientY - tap.y) >= 6)
+        return;
+
+    if (isAsmr)
         toggleAsmr();
+    else if (!hotspotPointer)
+        audio.playTouch();
 }
 
 function onWheel(event: WheelEvent) {
@@ -672,7 +704,7 @@ onUnmounted(() => {
                 'pan-enabled': panMode,
                 'is-panning': panning
             }"
-            @click="onAsmrClick"
+            @click="onCanvasClick"
         ></div>
 
         <div
