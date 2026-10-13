@@ -5,6 +5,7 @@ import { createAsmrPlayback } from "./createAsmrPlayback";
 
 interface AudioSessionOptions {
     assetKey?: string;
+    context?: AudioContext;
     catalogSha256: string;
     baseUrl: string;
     volume: () => number;
@@ -22,7 +23,7 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
     const effects = new Set<AudioBufferSourceNode>();
     const buttonTimes = new Map<string, number>();
     let manifest: AudioManifest | undefined;
-    let context: AudioContext | undefined;
+    let context: AudioContext | undefined = options.context;
     let gain: GainNode | undefined;
     let voice: AudioBufferSourceNode | undefined;
     let voiceText = "";
@@ -98,7 +99,7 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
             dependencies.set(cue.url, cue);
         }
 
-        context = new AudioContext();
+        context ??= new AudioContext();
         gain = context.createGain();
 
         gain.connect(context.destination);

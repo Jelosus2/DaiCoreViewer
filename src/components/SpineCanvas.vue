@@ -27,6 +27,11 @@ const props = defineProps<{
     assetKey: string;
     audioAssetKey?: string;
     catalogSha256: string;
+    audioContext?: AudioContext;
+}>();
+
+const emit = defineEmits<{
+    asmr: [id: number];
 }>();
 
 const stage = useTemplateRef<HTMLDivElement>("stage");
@@ -120,6 +125,7 @@ const {
 
 const audio = createAssetAudioSession({
     assetKey: props.audioAssetKey,
+    context: props.audioContext,
     catalogSha256: props.catalogSha256,
     baseUrl: import.meta.env.BASE_URL,
     volume: () => settingsStore.audioVolume,
@@ -290,6 +296,7 @@ async function setup() {
             onSpineUIChange: minigame.supported
                 ? minigame.setOpen
                 : undefined,
+            onAsmr: (id) => emit("asmr", id),
             getGamePortraitScale: () => props.placement?.[2] ?? 1,
             shouldPlayEntrance: () => !isAsmr && settingsStore.claimEntranceAnimation(props.assetKey),
             entranceEffects,

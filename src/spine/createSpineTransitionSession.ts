@@ -25,6 +25,7 @@ interface TransitionSessionOptions {
     onError: (error: unknown) => void;
     onSpineUIChange?: (open: boolean) => void;
     onActionStart?: (item: SpineActionItem, recordPosition?: number) => void;
+    onAsmr?: (id: number) => void;
     getGamePortraitScale: () => number;
     shouldPlayEntrance?: () => boolean;
     entranceEffects: EntranceEffects;
@@ -175,7 +176,8 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
                 canTransition,
                 onTransition: beginTransition,
                 onSpineUI: options.onSpineUIChange ? toggleSpineUI : undefined,
-                onActionStart: options.onActionStart
+                onActionStart: options.onActionStart,
+                onAsmr: options.onAsmr
             });
         }
 

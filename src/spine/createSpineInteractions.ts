@@ -37,6 +37,7 @@ interface SpineInteractionOptions {
     onTransition?: (transition: SpineRoleTransition, entry?: TrackEntry) => void;
     onSpineUI?: () => void;
     onActionStart?: (item: SpineActionItem, recordPosition?: number) => void;
+    onAsmr?: (id: number) => void;
 }
 
 export interface SpineInteractionState {
@@ -61,6 +62,7 @@ export function createSpineInteractions(
         .filter((action): action is ParsedSpineTap => action !== undefined)
         .filter((action) => !action.drag || options.scene !== undefined)
         .filter((action) => !action.spineUI || options.onSpineUI !== undefined)
+        .filter((action) => action.asmrId === undefined || options.onAsmr !== undefined)
         .filter((action) => !action.changeRole || options.canTransition?.(action.changeRole) === true);
     const actionsByIndex = new Map(parsed.map((action) => [action.item.index, action]));
     let priorSize: number;
@@ -581,6 +583,15 @@ export function createSpineInteractions(
     function trigger(action: ParsedSpineTap, fromPointer = false, forced = false, fromObjectRestore = false, onComplete?: () => void): boolean {
         if (action.gesture || (action.drag && !fromObjectRestore))
             return false;
+
+        if (action.asmrId !== undefined)
+        {
+            if (!fromPointer || destroyed || !enabled || gestureActive)
+                return false;
+
+            options.onAsmr?.(action.asmrId);
+            return true;
+        }
 
         const now = performance.now();
         if (destroyed || !enabled || (fromPointer && now < nextTapAt) || !canTrigger(action, forced))

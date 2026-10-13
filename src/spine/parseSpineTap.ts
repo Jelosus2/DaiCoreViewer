@@ -6,7 +6,7 @@ const supportedKeys = new Set([
     "isHide", "activation", "changeIdle", "clicks", "orderActions", "randomActions",
     "conditions", "needIdle", "needClicks", "noClick", "trackIndex", "clickTime",
     "reset7", "nextClick", "noFade", "guochange", "actions", "inIgnore", "changerole",
-    "isSpineUI", "gestureDatas", "drag"
+    "isSpineUI", "gestureDatas", "drag", "asmr"
 ]);
 
 export interface SpineRoleTransition {
@@ -55,6 +55,7 @@ export interface ParsedSpineTap {
         targets: Array<{ object: string; animation: string }>;
         hideSpine?: string;
     };
+    asmrId?: number;
 }
 
 export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): ParsedSpineTap | undefined {
@@ -166,6 +167,30 @@ export function parseSpineTap(item: SpineActionItem, spine: Spine, role = 1): Pa
             slots,
             targets,
             hideSpine: typeof hideSpine === "string" ? hideSpine : undefined
+        };
+    }
+
+    if ("asmr" in content)
+    {
+        const raw = content.asmr;
+        const asmrId = raw && typeof raw === "object" && !Array.isArray(raw)
+            ? positiveIndex(raw.id)
+            : undefined;
+
+        if (!asmrId || gestureValue !== 0 || item.sType !== 2 || Object.keys(content).some((key) => key !== "asmr" && key !== "isHide"))
+            return;
+
+        return {
+            item,
+            area,
+            trackIndex: 1,
+            initiallyHidden: "isHide" in content,
+            animationNames: [],
+            needIdle: false,
+            noFade: false,
+            guochange: false,
+            spineUI: false,
+            asmrId
         };
     }
 

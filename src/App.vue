@@ -10,9 +10,10 @@ import SiteNavbar from "./components/SiteNavbar.vue";
 
 import { buildSpineCatalog } from "./spine/buildSpineCatalog.ts";
 import { useSettingsStore } from "./stores/settingsStore.ts";
-import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch, shallowRef } from "vue";
 import { storeToRefs } from "pinia";
 
+const linkedAsmrContext = shallowRef<AudioContext>();
 const manifest = shallowRef<SpineManifest | null>(null);
 const catalogSha256 = ref("");
 const category = ref<ViewerCategory>("characters");
@@ -27,6 +28,13 @@ const controller = new AbortController();
 
 const settingsStore = useSettingsStore();
 const { entranceAnimation } = storeToRefs(settingsStore);
+
+let linkedAsmrId: string | undefined;
+
+watch([category, selectedOptionId], () => {
+    if (category.value !== "asmr" || selectedOptionId.value !== linkedAsmrId)
+        clearLinkedAsmrContext();
+});
 
 const catalog = computed(() => buildSpineCatalog(manifest.value));
 const items = computed(() => catalog.value[category.value]);
@@ -96,6 +104,34 @@ function chooseCategory(next: ViewerCategory) {
     chooseItem(catalog.value[next][0]?.id ?? null);
 }
 
+function clearLinkedAsmrContext() {
+    const context = linkedAsmrContext.value;
+    linkedAsmrContext.value = undefined;
+    linkedAsmrId = undefined;
+
+    if (context && context.state !== "closed")
+        void context.close().catch(() => {});
+}
+
+function openAsmr(id: number) {
+    const target = catalog.value.asmr.find((item) => item.id === String(id));
+    const option = target?.options.find((option) => option.render.status === "ready");
+
+    if (!target || !option)
+        return;
+
+    clearLinkedAsmrContext();
+
+    const context = new AudioContext();
+    void context.resume().catch(() => {});
+
+    linkedAsmrContext.value = context;
+    linkedAsmrId = option.id;
+    category.value = "asmr";
+    selectedItemId.value = target.id;
+    selectedOptionId.value = option.id;
+}
+
 onMounted(async () => {
     try
     {
@@ -136,7 +172,10 @@ onMounted(async () => {
     }
 });
 
-onUnmounted(() => controller.abort());
+onUnmounted(() => {
+    controller.abort();
+    clearLinkedAsmrContext();
+});
 </script>
 
 <template>
@@ -217,6 +256,7 @@ onUnmounted(() => controller.abort());
 
                 <SpineCanvas
                     v-if="root"
+                    class="mt-5 h-[60vh] min-h-80 overflow-hidden rounded-xl border border-line bg-stage lg:min-h-0 lg:flex-1"
                     :key="`${category}:${selectedItemId}:${selectedOptionId}`"
                     :root="root"
                     :render="selectedOption!.render"
@@ -228,7 +268,8 @@ onUnmounted(() => controller.abort());
                     :asset-key="`${category}:${selectedItemId}:${selectedOptionId}`"
                     :audio-asset-key="audioAssetKey"
                     :catalog-sha256="catalogSha256"
-                    class="mt-5 h-[60vh] min-h-80 overflow-hidden rounded-xl border border-line bg-stage lg:min-h-0 lg:flex-1"
+                    :audio-context="linkedAsmrContext"
+                    @asmr="openAsmr"
                 />
                 <div
                     v-else
