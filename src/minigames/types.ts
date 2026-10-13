@@ -1,4 +1,4 @@
-import type { SpineFraming, SpinePlacement } from "@/types/spine";
+import type { SpinePlacement } from "@/types/spine";
 import type { Container, Texture } from "pixi.js";
 import type { Component } from "vue";
 
@@ -34,10 +34,7 @@ export interface MinigameInstance {
 export interface MinigameDefinition {
     modelId: number;
     l2dName: string;
-    framing: {
-        mode: SpineFraming;
-        placement?: SpinePlacement;
-    };
+    placement?: SpinePlacement;
     create: (context: MinigameContext) => Promise<MinigameInstance | undefined>;
 }
 

@@ -7,6 +7,7 @@ const preferenceKey = "daicoreviewer:entrance-mode";
 const entranceKeyPrefix = "daicoreviewer:entrance-day:";
 const audioVolumeKey = "daicoreviewer:audio-volume";
 const audioCaptionsKey = "daicoreviewer:audio-captions";
+const interactionMarkersKey = "daicoreviewer:interaction-markers";
 
 function isMode(value: unknown): value is EntranceAnimationMode {
     return value === "always" || value === "daily" || value === "never";
@@ -22,6 +23,7 @@ export const useSettingsStore = defineStore("settings", () => {
     const entranceAnimation = ref<EntranceAnimationMode>(isMode(storedMode) ? storedMode : "daily");
     const audioVolume = ref(initialVolume);
     const audioCaptions = ref(readStored(audioCaptionsKey) !== "false");
+    const interactionMarkers = ref(readStored(interactionMarkersKey) === "true");
 
     watch([audioVolume, audioCaptions], ([volume, captions]) => {
         writeStored(audioVolumeKey, String(volume));
@@ -29,6 +31,11 @@ export const useSettingsStore = defineStore("settings", () => {
     }, { immediate: true, flush: "sync" });
 
     watch(entranceAnimation, (value) => writeStored(preferenceKey, value), {
+        immediate: true,
+        flush: "sync"
+    });
+
+    watch(interactionMarkers, (value) => writeStored(interactionMarkersKey, String(value)), {
         immediate: true,
         flush: "sync"
     });
@@ -77,6 +84,7 @@ export const useSettingsStore = defineStore("settings", () => {
         entranceAnimation,
         audioVolume,
         audioCaptions,
+        interactionMarkers,
         setEntranceAnimation,
         claimEntranceAnimation
     };

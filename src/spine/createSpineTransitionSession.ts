@@ -19,7 +19,7 @@ interface TransitionSessionOptions {
     hotspotLayer: Container;
     ticker: Ticker;
     cacheKeys: Set<string>;
-    showHotspots: boolean;
+    showMarkers: boolean;
     loadRoot: (root: SpineRoot) => Promise<void>;
     onSceneChanged: () => void;
     onError: (error: unknown) => void;
@@ -166,7 +166,7 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
 
         if (config && candidates.length === 1)
         {
-            interactions = createSpineInteractions(options.hotspotLayer, candidates[0], config, options.showHotspots, {
+            interactions = createSpineInteractions(options.hotspotLayer, candidates[0], config, options.showMarkers, {
                 role,
                 state,
                 scene: {
@@ -371,9 +371,9 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
 
             mount(options.initialRender.root, currentRole, true);
         },
-        setDebugVisible(visible: boolean) {
-            options.showHotspots = visible;
-            interactions?.setDebugVisible(visible);
+        setMarkersVisible(visible: boolean) {
+            options.showMarkers = visible;
+            interactions?.setMarkersVisible(visible);
         },
         destroy() {
             destroyed = true;

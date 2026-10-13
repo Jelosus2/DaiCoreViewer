@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import type { SpineRoot, SpinePlacement, SpineFraming, SpineActionConfig, SpineActionTarget, SpineRender } from "@/types/spine";
+import type { SpineRoot, SpinePlacement, SpineActionConfig, SpineActionTarget, SpineRender } from "@/types/spine";
 import type { AsmrState } from "@/types/audio.ts";
 
 import AudioControls from "./AudioControls.vue";
 import AsmrControls from "./AsmrControls.vue";
 import FullscreenIcon from "./icons/FullscreenIcon.vue";
+import InteractionMarkersIcon from "./icons/InteractionMarkersIcon.vue";
 
 import { createAssetAudioSession } from "@/audio/createAssetAudioSession";
 import { createSpineTransitionSession } from "@/spine/createSpineTransitionSession";
@@ -20,10 +21,8 @@ const props = defineProps<{
     root: SpineRoot;
     render: SpineRender;
     placement?: SpinePlacement;
-    framing: SpineFraming;
     interaction?: SpineActionConfig;
     transitionTargets?: SpineActionTarget[];
-    showHotspots: boolean;
     assetKey: string;
     audioAssetKey?: string;
     catalogSha256: string;
@@ -148,10 +147,15 @@ const audio = createAssetAudioSession({
     onBlocked: (blocked) => { audioBlocked.value = blocked; }
 });
 
-watch([() => props.framing, () => props.placement], resetZoom);
+watch(() => props.placement, resetZoom);
 
-watch(() => props.showHotspots, (show) => {
-    session?.setDebugVisible(show);
+watch([
+    () => settingsStore.interactionMarkers,
+    () => panMode.value,
+    () => minigameOpen.value,
+    () => loading.value
+], () => {
+    session?.setMarkersVisible(settingsStore.interactionMarkers && !panMode.value && !minigameOpen.value && !loading.value);
 });
 
 watch(() => [settingsStore.audioVolume, settingsStore.audioCaptions], () => {
@@ -295,7 +299,7 @@ async function setup() {
             overlayLayer,
             ticker: app.ticker,
             cacheKeys,
-            showHotspots: props.showHotspots,
+            showMarkers: false,
             loadRoot,
             onSceneChanged: () => reframe?.(),
             onError: (error) => {
@@ -378,17 +382,7 @@ async function setup() {
             if (disposed)
                 return;
 
-            const currentFrame = minigame.getFraming(props.placement, props.framing);
-
-            frame(
-                element,
-                app,
-                camera,
-                portrait,
-                artLayer,
-                currentFrame.placement,
-                currentFrame.mode
-            );
+            frame(element, app, camera, portrait, artLayer, minigame.getPlacement(props.placement));
         };
 
         reframe = resize;
@@ -492,8 +486,7 @@ function frame(
     camera: Container,
     portrait: Container,
     artLayer: Container,
-    placement: SpinePlacement | undefined,
-    framing: SpineFraming
+    placement: SpinePlacement | undefined
 ) {
     const width = Math.max(1, element.clientWidth);
     const height = Math.max(1, element.clientHeight);
@@ -502,7 +495,7 @@ function frame(
     portrait.position.set(0, 0);
     portrait.scale.set(1);
 
-    if (framing === "game" && placement)
+    if (placement)
     {
         portrait.position.set(placement[0], -placement[1]);
         portrait.scale.set(placement[2]);
@@ -538,8 +531,8 @@ function isMinigameIdle(): boolean {
 }
 
 function destroyView() {
-    application?.ticker.remove(updateAsmr);
-    application?.ticker.remove(updateTouch);
+    application?.ticker?.remove(updateAsmr);
+    application?.ticker?.remove(updateTouch);
     audio.destroy();
 
     asmr = undefined;
@@ -743,19 +736,38 @@ onUnmounted(() => {
             >+</button>
         </div>
 
-        <button
-            v-if="!isAsmr && fullscreenSupported && !loading && !errorMessage"
+        <div
+            v-if="!isAsmr && !loading && !errorMessage"
             data-canvas-controls
-            type="button"
-            :aria-label="fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
-            :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'"
-            class="absolute right-3 top-3 z-30 grid size-10 place-items-center rounded-lg border border-line bg-control text-muted shadow-lg hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+            class="absolute right-3 top-3 z-30 flex gap-2"
             @pointerdown.stop
             @wheel.stop
-            @click="toggleFullscreen"
         >
-            <FullscreenIcon :fullscreen="fullscreen" class="size-5" aria-hidden="true" focusable="false" />
-        </button>
+            <button
+                v-if="interaction && !minigameOpen"
+                type="button"
+                aria-label="Interaction hints"
+                :aria-pressed="settingsStore.interactionMarkers"
+                :title="settingsStore.interactionMarkers
+                    ? 'Hide interaction hints'
+                    : 'Show interaction hints. Circles: tap; arrows: swipe or drag; disc: ASMR; play: minigame.'"
+                :class="settingsStore.interactionMarkers ? 'bg-selected text-white' : 'bg-control text-muted'"
+                class="grid size-10 place-items-center rounded-lg border border-line shadow-lg hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+                @click="settingsStore.interactionMarkers = !settingsStore.interactionMarkers"
+            >
+                <InteractionMarkersIcon class="size-5" aria-hidden="true" focusable="false" />
+            </button>
+            <button
+                v-if="fullscreenSupported"
+                type="button"
+                :aria-label="fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+                :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'"
+                class="grid size-10 place-items-center rounded-lg border border-line bg-control text-muted shadow-lg hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+                @click="toggleFullscreen"
+            >
+                <FullscreenIcon :fullscreen="fullscreen" class="size-5" aria-hidden="true" focusable="false" />
+            </button>
+        </div>
 
         <AudioControls
             v-if="props.audioAssetKey && !loading && !errorMessage && !audioMessage"

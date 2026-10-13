@@ -1,4 +1,3 @@
-export type SpineFraming = "game" | "fit";
 export type SpinePlacement = [x: number, y: number, scale: number];
 
 export type SpineActionValue =

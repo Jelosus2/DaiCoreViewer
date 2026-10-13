@@ -7,9 +7,6 @@ import { loadMelodyAssets } from "./melodyAssets";
 export const melodyMinigame: MinigameDefinition = {
     modelId: 2008006,
     l2dName: "20080_skin_Melody06_spine",
-    framing: {
-        mode: "game"
-    },
     async create(context) {
         const { ui, images } = await loadMelodyAssets();
 

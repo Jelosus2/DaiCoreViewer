@@ -7,9 +7,6 @@ import { loadIjenAssets } from "./ijenAssets";
 export const ijenMinigame: MinigameDefinition = {
     modelId: 6035003,
     l2dName: "60350_skin_Ijen03_spine",
-    framing: {
-        mode: "game"
-    },
     async create(context) {
         const assets = await loadIjenAssets(context.signal);
         if (context.signal.aborted)

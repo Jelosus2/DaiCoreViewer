@@ -4,8 +4,9 @@ import { parseSpineTap, type ParsedSpineTap, type SpineRoleTransition } from "./
 import { attachSpineGesture, attachSpineObjectDrag, type SpineObjectDragScene } from "./attachSpineGesture";
 import { bindSpineSlotHotspots, type SpineSlotHotspot } from "./bindSpineSlotHotspots";
 import { prepareIdleTransitionAnimation } from "./prepareIdleTransitionAnimation";
+import { createSpineHotspotMarker } from "./createSpineHotspotMarker";
 import { Spine } from "@esotericsoftware/spine-pixi-v8";
-import { Container, Graphics, Rectangle, UPDATE_PRIORITY } from "pixi.js";
+import { Container, Rectangle, UPDATE_PRIORITY } from "pixi.js";
 
 type TrackEntry = ReturnType<Spine["state"]["setAnimation"]>;
 
@@ -55,7 +56,7 @@ export function createSpineInteractions(
     layer: Container,
     spine: Spine,
     interaction: SpineActionConfig,
-    showHotspots: boolean,
+    showMarkers: boolean,
     options: SpineInteractionOptions = {}
 ) {
     const itemsByIndex = new Map(interaction.items.map((item) => [item.index, item]));
@@ -81,7 +82,11 @@ export function createSpineInteractions(
 
     const actions = [...actionsByIndex.values()];
     const hitboxes = new Map<number, Container>();
-    const outlines: Graphics[] = [];
+    const markers: Array<ReturnType<typeof createSpineHotspotMarker> & {
+        action: ParsedSpineTap;
+        hitbox: Container;
+    }> = [];
+
     const stages = new Map<number, StagedTap>();
     const stoppedActions = new Map<number, StoppedAction>();
     const fadingEntries = new Map<number, TrackEntry>();
@@ -710,19 +715,15 @@ export function createSpineInteractions(
         hitbox.eventMode = "static";
         hitbox.cursor = action.gesture || action.drag ? "grab" : "pointer";
 
-        const outline = new Graphics()
-            .rect(-width / 2, -height / 2, width, height)
-            .stroke({ color: 0xc7aa83, width: 2 });
+        const hint = createSpineHotspotMarker(action);
+        hint.marker.visible = false;
 
-        outline.eventMode = "none";
-        outline.visible = showHotspots;
-
-        outlines.push(outline);
-        hitbox.addChild(outline);
+        markers.push({ ...hint, action, hitbox });
+        hitbox.addChild(hint.marker);
 
         const slotName = slotNames[action.item.index];
         if (slotName)
-            slotHotspots.push({ slotName, hitbox, outline });
+            slotHotspots.push({ slotName, hitbox, marker: hint.marker });
 
         hitbox.on("pointerdown", () => options.onHotspotPointer?.());
         hitboxes.set(action.item.index, hitbox);
@@ -828,6 +829,31 @@ export function createSpineInteractions(
         }
     };
 
+    function updateMarkers() {
+        for (const { action, hitbox, marker, update } of markers)
+        {
+            marker.visible = showMarkers && enabled && !gestureActive && hitbox.visible;
+            if (!marker.visible)
+                continue;
+
+            if (action.drag || action.gesture)
+            {
+                marker.visible = isIdle() && !recoveringGestureTracks.has(action.trackIndex);
+            }
+            else if (action.asmrId === undefined)
+            {
+                const stage = stages.get(action.trackIndex);
+                marker.visible = canTrigger(action) && !(action.clicks && stage &&
+                    spine.state.getCurrent(action.trackIndex) === stage.entry && stage.entry.timeScale !== 0);
+            }
+
+            if (marker.visible)
+                update(hitbox);
+        }
+    }
+
+    updateMarkers();
+    spine.ticker.add(updateMarkers, undefined, UPDATE_PRIORITY.NORMAL - 3);
     spine.state.addListener(eventListener);
 
     return {
@@ -850,15 +876,17 @@ export function createSpineInteractions(
         },
         setEnabled(value: boolean) {
             enabled = value;
+            updateMarkers();
         },
-        setDebugVisible(visible: boolean) {
-            for (const outline of outlines)
-                outline.visible = visible;
+        setMarkersVisible(visible: boolean) {
+            showMarkers = visible;
+            updateMarkers();
         },
         destroy() {
             destroyed = true;
 
             spine.state.removeListener(eventListener);
+            spine.ticker.remove(updateMarkers);
 
             for (const dispose of disposeGestures)
                 dispose();
@@ -878,7 +906,7 @@ export function createSpineInteractions(
             stoppedActions.clear();
             hitboxes.clear();
             recoveringGestureTracks.clear();
-            outlines.length = 0;
+            markers.length = 0;
             disposeGestures.length = 0;
         }
     }

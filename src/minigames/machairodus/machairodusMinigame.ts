@@ -11,9 +11,6 @@ import { Container, Sprite } from "pixi.js";
 export const machairodusMinigame: MinigameDefinition = {
     modelId: 3018005,
     l2dName: "30180_skin_Machairodus05a_spine",
-    framing: {
-        mode: "game"
-    },
     async create(context) {
         const ui = await loadMachairodusAssets();
         if (context.signal.aborted)

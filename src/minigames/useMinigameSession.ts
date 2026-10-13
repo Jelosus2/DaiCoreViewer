@@ -1,4 +1,4 @@
-import type { SpineActionConfig, SpineFraming, SpinePlacement, SpineRender} from "@/types/spine";
+import type { SpineActionConfig, SpinePlacement, SpineRender} from "@/types/spine";
 import type { MinigameInstance, MinigameOverlay, MinigamePortrait, MinigameScene, MinigameAudio } from "./types";
 import type { Texture } from "pixi.js";
 
@@ -148,14 +148,8 @@ export function useMinigameSession(options: MinigameSessionOptions) {
             preparing = waitOrAbort(task);
             return preparing;
         },
-        getFraming(placement: SpinePlacement | undefined, mode: SpineFraming) {
-            if (!open.value || !definition)
-                return { placement, mode };
-
-            return {
-                placement: definition.framing.placement ?? placement,
-                mode: definition.framing.mode
-            };
+        getPlacement(placement: SpinePlacement | undefined): SpinePlacement | undefined {
+            return open.value ? definition?.placement ?? placement : placement;
         }
     };
 }

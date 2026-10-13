@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SpineManifest, SpineFraming } from "./types/spine";
+import type { SpineManifest } from "./types/spine";
 import type { ViewerCategory } from "./types/viewer.ts";
 import { viewerCategories } from "./types/viewer.ts";
 
@@ -17,12 +17,10 @@ const linkedAsmrContext = shallowRef<AudioContext>();
 const manifest = shallowRef<SpineManifest | null>(null);
 const catalogSha256 = ref("");
 const category = ref<ViewerCategory>("characters");
-const framing = ref<SpineFraming>("game");
 const selectedItemId = ref<string | null>(null);
 const selectedOptionId = ref<string | null>(null);
 const loading = ref(true);
 const errorMessage = ref("");
-const showHotspots = ref(false);
 const settingsOpen = ref(false);
 const controller = new AbortController();
 
@@ -101,7 +99,7 @@ function chooseCategory(next: ViewerCategory) {
         return;
 
     category.value = next;
-    chooseItem(catalog.value[next][0]?.id ?? null);
+    chooseItem(null);
 }
 
 function clearLinkedAsmrContext() {
@@ -200,12 +198,11 @@ onUnmounted(() => {
                     {{ selectedItem.detail }}
                 </p>
 
-                <div v-if="selectedItem" class="mt-5 flex flex-wrap items-end gap-4">
-                    <label
-                        v-if="selectedItem.options.length > 1"
-                        for="option-select"
-                        class="grid gap-1 text-sm text-muted"
-                    >
+                <div
+                    v-if="selectedItem && selectedItem.options.length > 1"
+                    class="mt-5 flex flex-wrap items-end gap-4"
+                >
+                    <label for="option-select" class="grid gap-1 text-sm text-muted">
                         {{ category === "characters" ? "Skin / model" : "Variant" }}
                         <select
                             id="option-select"
@@ -221,37 +218,6 @@ onUnmounted(() => {
                             </option>
                         </select>
                     </label>
-
-                    <p
-                        v-if="selectedOption?.render.status === 'ready'"
-                        class="pb-2 text-sm text-subtle"
-                    >
-                        {{ selectedOption.render.layerCount }} layer(s)
-                    </p>
-
-                    <label
-                        v-if="root && selectedOption?.placement"
-                        for="framing-select"
-                        class="grid gap-1 text-sm text-muted"
-                    >
-                        View
-                        <select
-                            id="framing-select"
-                            v-model="framing"
-                            class="rounded border border-line bg-control px-3 py-2 focus:border-focus focus:outline-none"
-                        >
-                            <option value="game">Game framing</option>
-                            <option value="fit">Fit asset</option>
-                        </select>
-                    </label>
-
-                    <label
-                        v-if="root && selectedOption?.interaction"
-                        class="flex items-center gap-2 pb-2 text-sm text-muted"
-                    >
-                        <input v-model="showHotspots" type="checkbox" class="accent-focus">
-                        Show tap regions
-                    </label>
                 </div>
 
                 <SpineCanvas
@@ -261,10 +227,8 @@ onUnmounted(() => {
                     :root="root"
                     :render="selectedOption!.render"
                     :placement="selectedOption?.placement"
-                    :framing="framing"
                     :interaction="selectedOption?.interaction"
                     :transition-targets="transitionTargets"
-                    :show-hotspots="showHotspots"
                     :asset-key="`${category}:${selectedItemId}:${selectedOptionId}`"
                     :audio-asset-key="audioAssetKey"
                     :catalog-sha256="catalogSha256"

@@ -1,10 +1,10 @@
 import { Spine, RegionAttachment } from "@esotericsoftware/spine-pixi-v8";
-import { Container, Graphics, Point, Polygon, UPDATE_PRIORITY } from "pixi.js";
+import { Container, Point, Polygon, UPDATE_PRIORITY } from "pixi.js";
 
 export interface SpineSlotHotspot {
     slotName: string;
     hitbox: Container;
-    outline: Graphics;
+    marker: Container;
 }
 
 export function bindSpineSlotHotspots(layer: Container, spine: Spine, bindings: SpineSlotHotspot[]): () => void {
@@ -18,15 +18,8 @@ export function bindSpineSlotHotspots(layer: Container, spine: Spine, bindings: 
 
         const polygon = new Polygon([]);
         binding.hitbox.hitArea = polygon;
-        binding.outline.clear();
 
-        return {
-            ...binding,
-            slot,
-            polygon,
-            vertices: new Float32Array(8),
-            previous: new Array<number>(8).fill(Number.NaN)
-        };
+        return { ...binding, slot, polygon, vertices: new Float32Array(8) };
     });
 
     const local = new Point();
@@ -41,16 +34,14 @@ export function bindSpineSlotHotspots(layer: Container, spine: Spine, bindings: 
             if (!(attachment instanceof RegionAttachment))
             {
                 target.polygon.points.length = 0;
-                target.outline.clear();
-                target.previous.fill(Number.NaN);
-
                 continue;
             }
 
             attachment.computeWorldVertices(target.slot, target.vertices, 0, 2);
 
             const points = target.polygon.points;
-            let changed = points.length !== 8;
+            let centerX = 0;
+            let centerY = 0;
 
             for (let index = 0; index < 8; index += 2)
             {
@@ -60,19 +51,11 @@ export function bindSpineSlotHotspots(layer: Container, spine: Spine, bindings: 
 
                 points[index] = point.x;
                 points[index + 1] = point.y;
-
-                if (point.x !== target.previous[index] || point.y !== target.previous[index + 1])
-                    changed = true;
+                centerX += point.x;
+                centerY += point.y;
             }
 
-            if (changed)
-            {
-                target.outline.clear().poly(points, true)
-                    .stroke({ color: 0xc7aa83, width: 2 });
-
-                for (let index = 0; index < 8; index++)
-                    target.previous[index] = points[index];
-            }
+            target.marker.position.set(centerX / 4, centerY / 4);
         }
     }
 

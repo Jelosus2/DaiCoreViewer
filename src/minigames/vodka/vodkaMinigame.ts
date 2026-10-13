@@ -7,10 +7,7 @@ import { loadVodkaAssets } from "./vodkaAssets";
 export const vodkaMinigame: MinigameDefinition = {
     modelId: 7501003,
     l2dName: "75010_skin_VodkaMirror03_spine",
-    framing: {
-        mode: "game",
-        placement: [0, 0, 1]
-    },
+    placement: [0, 0, 1],
     async create(context) {
         const sprites = await loadVodkaAssets();
         if (context.signal.aborted)

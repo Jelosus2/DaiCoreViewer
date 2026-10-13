@@ -7,9 +7,6 @@ import { loadPoseidonAssets } from "./poseidonAssets";
 export const poseidonMinigame: MinigameDefinition = {
     modelId: 7003005,
     l2dName: "70030_skin_Poseidon05_spine",
-    framing: {
-        mode: "game"
-    },
     async create(context) {
         const image = await loadPoseidonAssets();
         if (context.signal.aborted)
