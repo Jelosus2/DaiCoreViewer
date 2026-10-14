@@ -41,6 +41,7 @@ const errorMessage = ref("");
 const loadingMessage = ref("Loading Spine assets...");
 const audioMessage = ref("");
 const audioBlocked = ref(false);
+const hasAudio = ref(false);
 const caption = ref("");
 const zoom = ref(1);
 const asmrState = ref<AsmrState>();
@@ -334,7 +335,7 @@ async function setup() {
 
             try
             {
-                await audio.prepare();
+                hasAudio.value = await audio.prepare();
             }
             catch (error)
             {
@@ -770,7 +771,7 @@ onUnmounted(() => {
         </div>
 
         <AudioControls
-            v-if="props.audioAssetKey && !loading && !errorMessage && !audioMessage"
+            v-if="hasAudio && !loading && !errorMessage && !audioMessage"
             :class="{ 'asmr-chrome': isAsmr }"
             v-model:volume="settingsStore.audioVolume"
             v-model:captions="settingsStore.audioCaptions"

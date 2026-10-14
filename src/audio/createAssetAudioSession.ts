@@ -61,9 +61,9 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         return bytes;
     }
 
-    async function prepare() {
+    async function prepare(): Promise<boolean> {
         if (!options.assetKey)
-            return;
+            return false;
 
         checkActive();
 
@@ -168,6 +168,8 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
 
             nextTouchAt = performance.now() + 180000;
             ready = true;
+
+            return clips.size > 0;
         }
         catch (error)
         {
