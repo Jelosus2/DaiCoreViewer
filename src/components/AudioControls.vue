@@ -95,7 +95,7 @@ onUnmounted(() => {
                 :aria-controls="panelId"
                 :title="volume === 0 ? 'Muted. Adjust volume' : blocked ? 'Enable sound and adjust volume' : 'Adjust volume'"
                 :data-state="volume === 0 ? 'muted' : 'audible'"
-                class="grid size-10 place-items-center border-r border-line text-muted hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+                class="grid size-11 lg:size-10 place-items-center border-r border-line text-muted hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
                 @click="toggleVolume"
             >
                 <SpeakerIcon :muted="volume === 0" class="size-5" aria-hidden="true" focusable="false" />
@@ -106,7 +106,7 @@ onUnmounted(() => {
                 :aria-pressed="captions"
                 :title="captions ? 'Turn captions off' : 'Turn captions on'"
                 :class="captions ? 'bg-selected text-white' : 'text-muted'"
-                class="grid size-10 place-items-center hover:bg-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+                class="grid size-11 lg:size-10 place-items-center hover:bg-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
                 @click="captions = !captions"
             >
                 <CaptionsIcon :enabled="captions" class="size-5" aria-hidden="true" focusable="false" />

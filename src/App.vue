@@ -5,11 +5,13 @@ import { viewerCategories } from "./types/viewer.ts";
 
 import SettingsModal from "./components/SettingsModal.vue";
 import AssetSidebar from "./components/AssetSidebar.vue";
+import AssetPicker from "./components/AssetPicker.vue";
 import SpineCanvas from "./components/SpineCanvas.vue";
 import SiteNavbar from "./components/SiteNavbar.vue";
 
 import { buildSpineCatalog } from "./spine/buildSpineCatalog.ts";
 import { useSettingsStore } from "./stores/settingsStore.ts";
+import { sha256Hex } from "./utils/sha256";
 import { computed, onMounted, onUnmounted, ref, watch, shallowRef } from "vue";
 import { storeToRefs } from "pinia";
 
@@ -22,6 +24,7 @@ const selectedOptionId = ref<string | null>(null);
 const loading = ref(true);
 const errorMessage = ref("");
 const settingsOpen = ref(false);
+const assetsOpen = ref(false);
 const controller = new AbortController();
 
 const settingsStore = useSettingsStore();
@@ -143,11 +146,7 @@ onMounted(async () => {
         const bytes = await response.arrayBuffer();
         const data = JSON.parse(new TextDecoder().decode(bytes)) as SpineManifest;
 
-        if (crypto.subtle)
-        {
-            const digest = await crypto.subtle.digest("SHA-256", bytes);
-            catalogSha256.value = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-        }
+        catalogSha256.value = await sha256Hex(bytes);
 
         if (data.schemaVersion !== 1)
             throw new Error("Unsupported Spine manifest version");
@@ -177,11 +176,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div class="flex min-h-dvh flex-col bg-page text-white lg:h-dvh">
-        <SiteNavbar @settings="settingsOpen = true" />
+    <div class="app-shell flex h-dvh min-h-0 flex-col overflow-hidden bg-page text-white">
+        <SiteNavbar
+            :assets-open="assetsOpen"
+            @assets="assetsOpen = true"
+            @settings="settingsOpen = true"
+        />
 
-        <main class="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <main class="flex min-h-0 flex-1">
             <AssetSidebar
+                class="hidden lg:flex"
                 :catalog="catalog"
                 :category="category"
                 :selected-id="selectedItemId"
@@ -190,30 +194,28 @@ onUnmounted(() => {
                 @select="chooseItem"
             />
 
-            <section class="flex min-h-0 min-w-0 flex-1 flex-col p-5">
-                <h1 class="text-2xl font-bold">
-                    {{ selectedItem?.name ?? "Select an asset" }}
-                </h1>
-                <p v-if="selectedItem" class="mt-1 text-sm text-subtle">
-                    {{ selectedItem.detail }}
-                </p>
-
-                <div
-                    v-if="selectedItem && selectedItem.options.length > 1"
-                    class="mt-5 flex flex-wrap items-end gap-4"
-                >
-                    <label for="option-select" class="grid gap-1 text-sm text-muted">
+            <section class="flex min-h-0 min-w-0 flex-1 flex-col p-3 lg:p-5">
+                <div class="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between lg:flex-col lg:items-stretch lg:gap-0">
+                    <div class="min-w-0">
+                        <h1 class="truncate text-xl font-bold lg:text-2xl">
+                            {{ selectedItem?.name ?? "Select an asset" }}
+                        </h1>
+                        <p v-if="selectedItem" class="mt-1 hidden text-sm text-subtle lg:block">
+                            {{ selectedItem.detail }}
+                        </p>
+                    </div>
+                    <label
+                        v-if="selectedItem && selectedItem.options.length > 1"
+                        for="option-select"
+                        class="grid min-w-0 gap-1 text-sm sm:w-64 lg:mt-5 lg:w-fit"
+                    >
                         {{ category === "characters" ? "Skin / model" : "Variant" }}
                         <select
                             id="option-select"
                             v-model="selectedOptionId"
-                            class="min-w-64 rounded border border-line bg-control px-3 py-2 focus:border-focus focus:outline-none"
+                            class="min-h-11 w-full min-w-0 rounded border border-line bg-control px-3 py-2 text-base focus:border-focus focus:outline-none lg:min-h-0 lg:min-w-64 lg:text-sm"
                         >
-                            <option
-                                v-for="option in selectedItem.options"
-                                :key="option.id"
-                                :value="option.id"
-                            >
+                            <option v-for="option in selectedItem.options" :key="option.id" :value="option.id">
                                 {{ option.label }}
                             </option>
                         </select>
@@ -222,7 +224,7 @@ onUnmounted(() => {
 
                 <SpineCanvas
                     v-if="root"
-                    class="mt-5 h-[60vh] min-h-80 overflow-hidden rounded-xl border border-line bg-stage lg:min-h-0 lg:flex-1"
+                    class="mt-3 min-h-0 flex-1 overflow-hidden rounded-xl border border-line bg-stage lg:mt-5"
                     :key="`${category}:${selectedItemId}:${selectedOptionId}`"
                     :root="root"
                     :render="selectedOption!.render"
@@ -233,22 +235,40 @@ onUnmounted(() => {
                     :audio-asset-key="audioAssetKey"
                     :catalog-sha256="catalogSha256"
                     :audio-context="linkedAsmrContext"
-                    :foreground="!settingsOpen"
+                    :foreground="!settingsOpen && !assetsOpen"
                     @asmr="openAsmr"
                 />
                 <div
                     v-else
                     role="status"
-                    class="mt-5 grid min-h-80 place-items-center rounded-xl border border-line bg-stage p-6 text-center text-muted"
+                    class="mt-3 grid min-h-0 flex-1 place-items-center rounded-xl border border-line bg-stage p-6 text-center text-muted lg:mt-5"
                 >
                     <p v-if="loading">Loading manifest...</p>
                     <p v-else-if="errorMessage" class="text-red-300">
                         {{ errorMessage }}
                     </p>
-                    <p v-else>{{ unavailableMessage }}</p>
+                    <div v-else>
+                        <p>{{ unavailableMessage }}</p>
+                        <button
+                            v-if="!selectedItem"
+                            type="button"
+                            class="mt-4 min-h-11 rounded-lg bg-selected px-4 py-2 text-white focus-visible:outline-2 focus-visible:outline-focus lg:hidden"
+                            @click="assetsOpen = true"
+                        >Browse assets</button>
+                    </div>
                 </div>
             </section>
         </main>
+
+        <AssetPicker
+            v-model:open="assetsOpen"
+            :catalog="catalog"
+            :category="category"
+            :selected-id="selectedItemId"
+            :loading="loading"
+            @category="chooseCategory"
+            @select="chooseItem"
+        />
 
         <SettingsModal
             v-model:open="settingsOpen"

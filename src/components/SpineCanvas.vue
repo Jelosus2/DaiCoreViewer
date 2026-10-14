@@ -702,7 +702,7 @@ onUnmounted(() => {
 
         <div
             v-if="!loading && !errorMessage"
-            :class="isAsmr ? 'asmr-chrome right-3 top-3 border-white/10 bg-black/30 backdrop-blur-md' : 'bottom-3 right-3 border-line bg-control'"
+            :class="isAsmr ? 'asmr-chrome right-3 top-16 border-white/10 sm:top-3 bg-black/30 backdrop-blur-md' : 'bottom-3 right-3 border-line bg-control'"
             class="absolute flex overflow-hidden rounded-lg border shadow-lg"
         >
             <button
@@ -712,26 +712,26 @@ onUnmounted(() => {
                 :disabled="minigameOpen"
                 title="Turn Pan on to drag the view with one finger or the left mouse button."
                 :class="panMode ? 'bg-selected text-white' : ''"
-                class="border-r border-line px-3 py-2 text-sm hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                class="min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 border-r border-line px-3 py-2 text-sm hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
                 @click="togglePanMode"
             >Pan</button>
             <button
                 type="button"
                 aria-label="Zoom out"
-                class="px-3 py-2 hover:bg-hover"
+                class="min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 px-3 py-2 hover:bg-hover"
                 @click="setZoom(zoom / 1.2)"
             >−</button>
             <button
                 type="button"
                 aria-label="Reset zoom and position"
                 title="Click to reset zoom and position. Drag with the middle mouse button to pan outside minigames."
-                class="border-x border-line px-3 py-2 text-sm hover:bg-hover"
+                class="min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 border-x border-line px-3 py-2 text-sm hover:bg-hover"
                 @click="resetZoom"
             >{{ Math.round(zoom * 100) }}%</button>
             <button
                 type="button"
                 aria-label="Zoom in"
-                class="px-3 py-2 hover:bg-hover"
+                class="min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 px-3 py-2 hover:bg-hover"
                 @click="setZoom(zoom * 1.2)"
             >+</button>
         </div>
@@ -752,7 +752,7 @@ onUnmounted(() => {
                     ? 'Hide interaction hints'
                     : 'Show interaction hints. Circles: tap; arrows: swipe or drag; disc: ASMR; play: minigame.'"
                 :class="settingsStore.interactionMarkers ? 'bg-selected text-white' : 'bg-control text-muted'"
-                class="grid size-10 place-items-center rounded-lg border border-line shadow-lg hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+                class="grid size-11 place-items-center lg:size-10 rounded-lg border border-line shadow-lg hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
                 @click="settingsStore.interactionMarkers = !settingsStore.interactionMarkers"
             >
                 <InteractionMarkersIcon class="size-5" aria-hidden="true" focusable="false" />
@@ -762,7 +762,7 @@ onUnmounted(() => {
                 type="button"
                 :aria-label="fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
                 :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'"
-                class="grid size-10 place-items-center rounded-lg border border-line bg-control text-muted shadow-lg hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+                class="grid size-11 place-items-center lg:size-10 rounded-lg border border-line bg-control text-muted shadow-lg hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
                 @click="toggleFullscreen"
             >
                 <FullscreenIcon :fullscreen="fullscreen" class="size-5" aria-hidden="true" focusable="false" />

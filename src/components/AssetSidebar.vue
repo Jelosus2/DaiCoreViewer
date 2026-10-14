@@ -2,13 +2,14 @@
 import type { SpineCatalog, ViewerCategory } from "@/types/viewer";
 import { viewerCategories } from "@/types/viewer";
 
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, useId } from "vue";
 
 const props = defineProps<{
     catalog: SpineCatalog;
     category: ViewerCategory;
     selectedId: string | null;
     loading: boolean;
+    picker?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -17,6 +18,7 @@ const emit = defineEmits<{
 }>();
 
 const query = ref("");
+const searchId = useId();
 const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
 
 const categoryLabel = computed(() => viewerCategories.find((item) => item.id === props.category)?.label ?? "Assets");
@@ -35,12 +37,17 @@ watch(() => props.category, () => {
 
 <template>
     <aside
-        class="flex max-h-96 min-h-0 shrink-0 flex-col border-b border-line bg-sidebar lg:max-h-none lg:w-72 lg:border-b-0 lg:border-r"
+        class="min-h-0 shrink-0 flex-col bg-sidebar"
+        :class="picker ? 'flex h-full w-full' : 'w-72 border-r border-line'"
     >
         <div class="border-b border-line p-4">
-            <h2 class="font-semibold">Assets</h2>
+            <h2 v-if="!picker" class="font-semibold">Assets</h2>
 
-            <div class="mt-3 grid grid-cols-2 gap-1" aria-label="Asset categories">
+            <div
+                class="grid grid-cols-2 gap-1"
+                :class="{ 'mt-3': !picker }"
+                aria-label="Asset categories"
+            >
                 <button
                     v-for="tab in viewerCategories"
                     :key="tab.id"
@@ -49,7 +56,7 @@ watch(() => props.category, () => {
                     :class="category === tab.id
                         ? 'bg-selected text-white'
                         : 'text-muted hover:bg-hover'"
-                    class="rounded px-2 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-focus"
+                    class="min-h-11 rounded px-2 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-focus"
                     @click="emit('category', tab.id)"
                 >
                     {{ tab.label }}
@@ -57,11 +64,11 @@ watch(() => props.category, () => {
                 </button>
             </div>
 
-            <label for="asset-search" class="mt-4 block text-sm text-muted">
+            <label :for="searchId" class="mt-4 block text-sm text-muted">
                 Search {{ categoryLabel }}
             </label>
             <input
-                id="asset-search"
+                :id="searchId"
                 v-model="query"
                 type="search"
                 placeholder="Name or ID"
@@ -87,7 +94,7 @@ watch(() => props.category, () => {
                         :class="selectedId === item.id
                             ? 'bg-selected text-white'
                             : 'text-muted hover:bg-hover'"
-                        class="w-full rounded px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-focus"
+                        class="w-full min-h-11 rounded px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-focus"
                         @click="emit('select', item.id)"
                     >
                         <span class="block truncate font-medium">{{ item.name }}</span>

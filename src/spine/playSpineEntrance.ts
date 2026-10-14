@@ -250,7 +250,7 @@ function createEntranceEffect(clip: EntranceClip) {
     const meshes = clip.meshes.map((source) => {
         const mesh = new MeshSimple({
             texture: source.texture ? Texture.from(source.texture) : Texture.WHITE,
-            vertices: new Float32Array(source.frames[0]!.slice(1)),
+            vertices: new Float32Array(source.frames[0].slice(1)),
             uvs: new Float32Array(source.uvs),
             indices: new Uint32Array(source.indices)
         });

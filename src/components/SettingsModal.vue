@@ -56,7 +56,7 @@ onBeforeUnmount(() => dialog.value?.close());
                 <button
                     type="button"
                     autofocus
-                    class="rounded px-3 py-1.5 text-sm text-muted hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:outline-focus"
+                    class="min-h-11 rounded px-3 py-1.5 text-sm text-muted hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:outline-focus"
                     @click="close"
                 >
                     Close

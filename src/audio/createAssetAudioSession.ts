@@ -2,6 +2,7 @@ import type { AudioCue, AudioManifest } from "@/types/audio";
 import type { SpineActionItem } from "@/types/spine";
 
 import { createAsmrPlayback } from "./createAsmrPlayback";
+import { sha256Hex } from "@/utils/sha256";
 
 interface AudioSessionOptions {
     assetKey?: string;
@@ -122,17 +123,16 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         async function worker() {
             while (next < pending.length)
             {
-                const [url, cue] = pending[next++]!;
+                const [url, cue] = pending[next++];
                 const bytes = await fetchBytes(assetUrl(url));
 
                 if (bytes.byteLength !== cue.bytes)
                     throw new Error("Audio clip size mismatch");
 
-                const digest = await crypto.subtle.digest("SHA-256", bytes);
+                const hash = await sha256Hex(bytes);
 
                 checkActive();
 
-                const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
                 if (hash !== cue.sha256)
                     throw new Error("Audio clip hash mismatch");
 

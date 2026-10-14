@@ -40,7 +40,7 @@ function seek(event: Event) {
                 :disabled="!state.ready"
                 :aria-label="state.ended ? 'Replay ASMR' : state.paused || state.blocked ? 'Play ASMR' : 'Pause ASMR'"
                 :title="state.ended ? 'Replay' : state.paused || state.blocked ? 'Play' : 'Pause'"
-                class="grid size-9 shrink-0 place-items-center rounded-full hover:bg-white/10 disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-white"
+                class="grid size-11 shrink-0 lg:size-9 place-items-center rounded-full hover:bg-white/10 disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-white"
                 @click="emit('toggle')"
             >
                 <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -60,7 +60,7 @@ function seek(event: Event) {
                 type="button"
                 :aria-label="fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
                 :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'"
-                class="grid size-9 shrink-0 place-items-center rounded-full text-white/75 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white"
+                class="grid size-11 shrink-0 lg:size-9 place-items-center rounded-full text-white/75 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white"
                 @click="emit('fullscreen')"
             >
                 <FullscreenIcon :fullscreen="fullscreen" class="size-5" aria-hidden="true" focusable="false" />
