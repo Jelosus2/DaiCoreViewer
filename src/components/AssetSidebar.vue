@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import type { SpineCatalog, ViewerCategory } from "@/types/viewer";
+import type { SpineCatalog, ViewerCategory, ViewerArtwork } from "@/types/viewer";
 import { viewerCategories } from "@/types/viewer";
+
+import AssetThumbnail from "./AssetThumbnail.vue";
 
 import { computed, ref, watch, useId } from "vue";
 
@@ -15,6 +17,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     category: [category: ViewerCategory];
     select: [id: string];
+    artwork: [artwork: ViewerArtwork];
 }>();
 
 const query = ref("");
@@ -38,7 +41,7 @@ watch(() => props.category, () => {
 <template>
     <aside
         class="min-h-0 shrink-0 flex-col bg-sidebar"
-        :class="picker ? 'flex h-full w-full' : 'w-72 border-r border-line'"
+        :class="picker ? 'flex h-full w-full' : 'w-80 border-r border-line'"
     >
         <div class="border-b border-line p-4">
             <h2 v-if="!picker" class="font-semibold">Assets</h2>
@@ -88,18 +91,35 @@ watch(() => props.category, () => {
             </p>
             <ul v-else class="space-y-1">
                 <li v-for="item in filteredItems" :key="item.id">
-                    <button
-                        type="button"
-                        :aria-pressed="selectedId === item.id"
-                        :class="selectedId === item.id
-                            ? 'bg-selected text-white'
-                            : 'text-muted hover:bg-hover'"
-                        class="w-full min-h-11 rounded px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-focus"
-                        @click="emit('select', item.id)"
+                    <div
+                        :class="selectedId === item.id ? 'bg-selected text-white' : 'text-muted hover:bg-hover'"
+                        class="flex items-center gap-3 rounded-lg p-2"
                     >
-                        <span class="block truncate font-medium">{{ item.name }}</span>
-                        <span class="block truncate text-xs opacity-80">{{ item.detail }}</span>
-                    </button>
+                        <button
+                            v-if="item.artwork"
+                            type="button"
+                            :aria-label="`View artwork: ${item.name}`"
+                            aria-haspopup="dialog"
+                            class="shrink-0 cursor-zoom-in rounded-lg focus-visible:outline-2 focus-visible:outline-focus"
+                            @click="emit('artwork', { src: item.artwork, title: item.name })"
+                        >
+                            <AssetThumbnail :src="item.thumbnail" />
+                        </button>
+                        <AssetThumbnail v-else :src="item.thumbnail" />
+                        <button
+                            type="button"
+                            :aria-pressed="selectedId === item.id"
+                            class="min-h-18 min-w-0 flex-1 rounded text-left focus-visible:outline-2 focus-visible:outline-focus"
+                            @click="emit('select', item.id)"
+                        >
+                            <span class="block text-sm font-medium leading-5 wrap-break-word">
+                                {{ item.name }}
+                            </span>
+                            <span class="mt-1 block text-xs leading-4 wrap-break-word opacity-80">
+                                {{ item.detail }}
+                            </span>
+                        </button>
+                    </div>
                 </li>
             </ul>
         </nav>

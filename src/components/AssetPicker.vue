@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SpineCatalog, ViewerCategory } from "@/types/viewer";
+import type { SpineCatalog, ViewerCategory, ViewerArtwork } from "@/types/viewer";
 
 import AssetSidebar from "./AssetSidebar.vue";
 
@@ -15,6 +15,7 @@ defineProps<{
 const emit = defineEmits<{
     category: [category: ViewerCategory];
     select: [id: string];
+    artwork: [artwork: ViewerArtwork];
 }>();
 
 const open = defineModel<boolean>("open", { required: true });
@@ -92,6 +93,7 @@ onBeforeUnmount(() => {
                     class="flex-1"
                     @category="emit('category', $event)"
                     @select="select"
+                    @artwork="emit('artwork', $event)"
                 />
             </div>
         </dialog>

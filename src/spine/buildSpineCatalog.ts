@@ -1,7 +1,7 @@
-import type { SpineCatalog, ViewerItem, ViewerOption } from "@/types/viewer";
+import type { SpineCatalog, ViewerItem, ViewerOption, AssetPreviews } from "@/types/viewer";
 import type { SpineManifest, SpineModel } from "@/types/spine";
 
-export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog {
+export function buildSpineCatalog(manifest: SpineManifest | null, previews?: AssetPreviews): SpineCatalog {
     const catalog: SpineCatalog = {
         characters: [],
         asmr: [],
@@ -30,13 +30,25 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
         for (const model of models)
             modelIndex.set(model.modelId, { characterName: name, model });
 
-        const readyCount = options.filter((option) => option.render.status === "ready").length;
-        const detail = `${character.names.alias ?? character.names.local ?? roleId} · ${roleId} · ${readyCount}/${options.length} ready`;
+        const firstReady = options.find((option) => option.render.status === "ready");
+        if (!firstReady)
+            continue;
 
-        addIfReady(catalog.characters, makeItem(roleId, name, detail, options, [
-            character.names.local,
-            character.names.alias
-        ]));
+        for (const [index, model] of models.entries())
+        {
+            const option = options[index];
+            const skinTitle = model.skinName?.english ?? model.skinName?.local ?? model.render.l2dName;
+            const title = option.id === firstReady.id ? name : `${name} - ${skinTitle}`;
+            const status = option.render.status === "ready" ? "" : " · Unavailable";
+            const detail = `${skinTitle} · ${model.modelId}${status}`;
+
+            catalog.characters.push(makeItem(option.id, title, detail, [option], [
+                roleId,
+                character.names.local,
+                character.names.alias,
+                model.skinName?.local
+            ]));
+        }
     }
 
     for (const item of manifest.special?.asmr ?? [])
@@ -92,6 +104,16 @@ export function buildSpineCatalog(manifest: SpineManifest | null): SpineCatalog 
             label: asset.name,
             render: asset.render
         }]));
+    }
+
+    for (const [category, prefix] of [["characters", "model"], ["ungrouped", "model"], ["asmr", "asmr"], ["archives", "archive"]] as const)
+    {
+        for (const item of catalog[category])
+        {
+            const key = `${prefix}:${item.options[0].id}`;
+            item.thumbnail = previews?.images[key];
+            item.artwork = previews?.artwork?.[key];
+        }
     }
 
     return catalog;

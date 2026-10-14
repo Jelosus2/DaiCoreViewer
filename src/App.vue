@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { SpineManifest } from "./types/spine";
-import type { ViewerCategory } from "./types/viewer.ts";
+import type { ViewerCategory, AssetPreviews, ViewerArtwork } from "./types/viewer.ts";
 import { viewerCategories } from "./types/viewer.ts";
 
+import AssetArtworkModal from "./components/AssetArtworkModal.vue";
 import SettingsModal from "./components/SettingsModal.vue";
 import AssetSidebar from "./components/AssetSidebar.vue";
 import AssetPicker from "./components/AssetPicker.vue";
@@ -17,6 +18,8 @@ import { storeToRefs } from "pinia";
 
 const linkedAsmrContext = shallowRef<AudioContext>();
 const manifest = shallowRef<SpineManifest | null>(null);
+const previews = shallowRef<AssetPreviews>();
+const artwork = shallowRef<ViewerArtwork | null>(null);
 const catalogSha256 = ref("");
 const category = ref<ViewerCategory>("characters");
 const selectedItemId = ref<string | null>(null);
@@ -37,7 +40,7 @@ watch([category, selectedOptionId], () => {
         clearLinkedAsmrContext();
 });
 
-const catalog = computed(() => buildSpineCatalog(manifest.value));
+const catalog = computed(() => buildSpineCatalog(manifest.value, previews.value));
 const items = computed(() => catalog.value[category.value]);
 const selectedItem = computed(() => items.value.find((item) => item.id === selectedItemId.value));
 const selectedOption = computed(() => selectedItem.value?.options.find((option) => option.id === selectedOptionId.value));
@@ -89,6 +92,30 @@ const unavailableMessage = computed(() => {
 
     return render.reason ?? `This asset is unavailable (${render.status.replaceAll("_", " ")}).`;
 });
+
+async function loadPreviews() {
+    try
+    {
+        const response = await fetch(`${import.meta.env.BASE_URL}assets/spine/previews/asset-previews.json`, {
+            signal: controller.signal
+        });
+
+        if (!response.ok)
+            throw new Error(`Preview request failed: ${response.status}`);
+
+        const data = await response.json() as AssetPreviews;
+        if (data.schemaVersion !== 1 || data.catalogSha256 !== catalogSha256.value)
+            throw new Error("Previews and Spine catalogs do not match; regenerate previews");
+
+        if (!controller.signal.aborted)
+            previews.value = data;
+    }
+    catch (error)
+    {
+        if (!controller.signal.aborted)
+            console.warn("Asset previews unavailable:", error);
+    }
+}
 
 function chooseItem(id: string | null) {
     selectedItemId.value = id;
@@ -152,7 +179,10 @@ onMounted(async () => {
             throw new Error("Unsupported Spine manifest version");
 
         if (!controller.signal.aborted)
+        {
             manifest.value = data;
+            void loadPreviews();
+        }
     }
     catch (error)
     {
@@ -192,6 +222,7 @@ onUnmounted(() => {
                 :loading="loading"
                 @category="chooseCategory"
                 @select="chooseItem"
+                @artwork="artwork = $event"
             />
 
             <section class="flex min-h-0 min-w-0 flex-1 flex-col p-3 lg:p-5">
@@ -204,22 +235,6 @@ onUnmounted(() => {
                             {{ selectedItem.detail }}
                         </p>
                     </div>
-                    <label
-                        v-if="selectedItem && selectedItem.options.length > 1"
-                        for="option-select"
-                        class="grid min-w-0 gap-1 text-sm sm:w-64 lg:mt-5 lg:w-fit"
-                    >
-                        {{ category === "characters" ? "Skin / model" : "Variant" }}
-                        <select
-                            id="option-select"
-                            v-model="selectedOptionId"
-                            class="min-h-11 w-full min-w-0 rounded border border-line bg-control px-3 py-2 text-base focus:border-focus focus:outline-none lg:min-h-0 lg:min-w-64 lg:text-sm"
-                        >
-                            <option v-for="option in selectedItem.options" :key="option.id" :value="option.id">
-                                {{ option.label }}
-                            </option>
-                        </select>
-                    </label>
                 </div>
 
                 <SpineCanvas
@@ -235,7 +250,7 @@ onUnmounted(() => {
                     :audio-asset-key="audioAssetKey"
                     :catalog-sha256="catalogSha256"
                     :audio-context="linkedAsmrContext"
-                    :foreground="!settingsOpen && !assetsOpen"
+                    :foreground="!settingsOpen && !assetsOpen && !artwork"
                     @asmr="openAsmr"
                 />
                 <div
@@ -268,7 +283,10 @@ onUnmounted(() => {
             :loading="loading"
             @category="chooseCategory"
             @select="chooseItem"
+            @artwork="artwork = $event"
         />
+
+        <AssetArtworkModal v-model:artwork="artwork" />
 
         <SettingsModal
             v-model:open="settingsOpen"

@@ -23,7 +23,21 @@ export interface ViewerItem {
     name: string;
     detail: string;
     searchText: string;
+    thumbnail?: string;
+    artwork?: string;
     options: ViewerOption[];
 }
 
 export type SpineCatalog = Record<ViewerCategory, ViewerItem[]>;
+
+export interface AssetPreviews {
+    schemaVersion: number;
+    catalogSha256: string;
+    images: Record<string, string>;
+    artwork?: Record<string, string>;
+}
+
+export interface ViewerArtwork {
+    src: string;
+    title: string;
+}
