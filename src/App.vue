@@ -9,6 +9,7 @@ import AssetSidebar from "./components/AssetSidebar.vue";
 import AssetPicker from "./components/AssetPicker.vue";
 import SpineCanvas from "./components/SpineCanvas.vue";
 import SiteNavbar from "./components/SiteNavbar.vue";
+import SiteFooter from "./components/SiteFooter.vue";
 
 import { buildSpineCatalog } from "./spine/buildSpineCatalog.ts";
 import { useSettingsStore } from "./stores/settingsStore.ts";
@@ -274,6 +275,8 @@ onUnmounted(() => {
                 </div>
             </section>
         </main>
+
+        <SiteFooter />
 
         <AssetPicker
             v-model:open="assetsOpen"
