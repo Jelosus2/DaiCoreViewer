@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import GearIcon from './icons/GearIcon.vue';
+import GearIcon from "./icons/GearIcon.vue";
 
 defineProps<{ assetsOpen: boolean; }>();
 
@@ -7,6 +7,8 @@ const emit = defineEmits<{
     assets: [];
     settings: [];
 }>();
+
+const siteIconUrl = `${import.meta.env.BASE_URL}game-icon.png`;
 
 function refreshSite() {
     window.location.reload();
@@ -19,10 +21,20 @@ function refreshSite() {
             <button
                 type="button"
                 aria-label="DaiCoreViewer — refresh site"
-                class="rounded text-left text-lg font-bold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus sm:text-2xl"
+                class="flex min-h-11 min-w-0 items-center gap-2 rounded text-left text-sm font-bold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus sm:text-2xl"
                 @click="refreshSite"
             >
-                <span class="text-focus">Dai</span><span class="text-white">Core</span><span class="font-medium text-muted">Viewer</span>
+                <img
+                    :src="siteIconUrl"
+                    alt=""
+                    aria-hidden="true"
+                    width="32"
+                    height="32"
+                    class="size-6 shrink-0 rounded-md sm:size-8"
+                >
+                <span class="whitespace-nowrap">
+                    <span class="text-focus">Dai</span><span class="text-white">Core</span><span class="font-medium text-muted">Viewer</span>
+                </span>
             </button>
 
             <div class="flex shrink-0 items-center gap-1">
