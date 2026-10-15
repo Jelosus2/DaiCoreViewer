@@ -11,6 +11,7 @@ interface AudioSessionOptions {
     baseUrl: string;
     volume: () => number;
     captions: () => boolean;
+    translateCaption: (key: string, original: string, audioSha256: string) => string;
     onProgress: (completed: number, total: number) => void;
     onCaption: (text: string) => void;
     onBlocked: (blocked: boolean) => void;
@@ -28,6 +29,8 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
     let gain: GainNode | undefined;
     let voice: AudioBufferSourceNode | undefined;
     let voiceText = "";
+    let voiceCaptionKey = "";
+    let audioSha256 = "";
     let touchIds: number[] = [];
     let nextTouchAt = 0;
     let music: {
@@ -69,6 +72,7 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
 
         const raw = await fetchBytes(assetUrl("assets/audio/manifest.json"));
         const data = JSON.parse(new TextDecoder().decode(raw)) as AudioManifest;
+        audioSha256 = await sha256Hex(raw);
 
         if (data.schemaVersion !== 1 || data.mode !== "export" || !options.catalogSha256 || data.catalogSha256 !== options.catalogSha256)
             throw new Error("Audio and Spine catalogs do not match");
@@ -296,15 +300,17 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
                 voice = undefined;
                 nextTouchAt = performance.now() + 180000;
                 voiceText = "";
+                voiceCaptionKey = "";
                 options.onCaption("");
             }
         };
 
         voice = source;
         voiceText = hideText ? "" : sound.script2 ?? "";
+        voiceCaptionKey = `voice:${id}:caption`;
 
         source.start();
-        options.onCaption(options.captions() ? voiceText : "");
+        options.onCaption(options.captions() && voiceText ? options.translateCaption(voiceCaptionKey, voiceText, audioSha256) : "");
     }
 
     function playEffect(bank: string, name: string) {
@@ -472,6 +478,7 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
             duration: cue.durationSeconds!,
             words: manifest?.asmrCaptions[String(cfg.voice)]?.arr ?? [],
             captions: options.captions,
+            translateCaption: (index, original) => options.translateCaption(`asmr-caption:${cfg.voice}:${index}`, original, audioSha256),
             onCaption: options.onCaption,
             onBlocked: options.onBlocked,
             onFrame: createSync(cfg.e_anim),
@@ -526,7 +533,7 @@ export function createAssetAudioSession(options: AudioSessionOptions) {
         if (asmr)
             asmr.update();
         else
-            options.onCaption(options.captions() ? voiceText : "");
+            options.onCaption(options.captions() && voiceText ? options.translateCaption(voiceCaptionKey, voiceText, audioSha256) : "");
     }
 
     function destroy() {

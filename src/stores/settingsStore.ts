@@ -1,5 +1,6 @@
 import { acceptHMRUpdate, defineStore } from "pinia";
 import { ref, watch } from "vue";
+import type { GameLanguage } from "@/types/localization";
 
 export type EntranceAnimationMode = "always" | "daily" | "never";
 
@@ -8,6 +9,7 @@ const entranceKeyPrefix = "daicoreviewer:entrance-day:";
 const audioVolumeKey = "daicoreviewer:audio-volume";
 const audioCaptionsKey = "daicoreviewer:audio-captions";
 const interactionMarkersKey = "daicoreviewer:interaction-markers";
+const gameLanguageKey = "daicoreviewer:game-language";
 
 function isMode(value: unknown): value is EntranceAnimationMode {
     return value === "always" || value === "daily" || value === "never";
@@ -24,6 +26,7 @@ export const useSettingsStore = defineStore("settings", () => {
     const audioVolume = ref(initialVolume);
     const audioCaptions = ref(readStored(audioCaptionsKey) !== "false");
     const interactionMarkers = ref(readStored(interactionMarkersKey) === "true");
+    const gameLanguage = ref<GameLanguage>(readStored(gameLanguageKey) === "zh-Hant" ? "zh-Hant" : "en");
 
     watch([audioVolume, audioCaptions], ([volume, captions]) => {
         writeStored(audioVolumeKey, String(volume));
@@ -36,6 +39,11 @@ export const useSettingsStore = defineStore("settings", () => {
     });
 
     watch(interactionMarkers, (value) => writeStored(interactionMarkersKey, String(value)), {
+        immediate: true,
+        flush: "sync"
+    });
+
+    watch(gameLanguage, (value) => writeStored(gameLanguageKey, value), {
         immediate: true,
         flush: "sync"
     });
@@ -85,6 +93,7 @@ export const useSettingsStore = defineStore("settings", () => {
         audioVolume,
         audioCaptions,
         interactionMarkers,
+        gameLanguage,
         setEntranceAnimation,
         claimEntranceAnimation
     };

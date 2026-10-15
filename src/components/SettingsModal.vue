@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import type { EntranceAnimationMode } from "@/stores/settingsStore";
+import type { GameLanguage } from "@/types/localization";
 
 import { onBeforeUnmount, onMounted, useTemplateRef, watch } from "vue";
 
+defineProps<{ localizationError?: string }>();
+
 const open = defineModel<boolean>("open", { required: true });
 const entranceAnimation = defineModel<EntranceAnimationMode>("entranceAnimation", { required: true });
+const gameLanguage = defineModel<GameLanguage>("gameLanguage", { required: true });
 
 const dialog = useTemplateRef<HTMLDialogElement>("dialog");
 
@@ -64,6 +68,24 @@ onBeforeUnmount(() => dialog.value?.close());
             </div>
 
             <div class="p-5">
+                <label for="game-language" class="block text-sm font-medium">Text language</label>
+                <select
+                    id="game-language"
+                    v-model="gameLanguage"
+                    aria-describedby="language-description"
+                    class="mt-2 w-full rounded border border-line bg-control px-3 py-2 text-muted focus:border-focus focus:outline-none"
+                >
+                    <option value="en">English (AI-translated)</option>
+                    <option value="zh-Hant">中文 — Original Chinese</option>
+                </select>
+                <p id="language-description" class="mt-2 text-sm text-subtle">
+                    English is an unofficial AI translation and may contain inaccuracies. New or changed text without a matching translation
+                    appears in the original Chinese.
+                </p>
+                <p v-if="localizationError" role="status" class="mt-2 text-sm text-amber-200">{{ localizationError }}</p>
+            </div>
+
+            <div class="border-t border-line p-5">
                 <label for="entrance-animation" class="block text-sm font-medium">
                     Play entrance animation
                 </label>

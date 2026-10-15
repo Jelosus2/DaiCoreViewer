@@ -13,6 +13,7 @@ import SiteFooter from "./components/SiteFooter.vue";
 
 import { buildSpineCatalog } from "./spine/buildSpineCatalog.ts";
 import { useSettingsStore } from "./stores/settingsStore.ts";
+import { useLocalizationStore } from "./stores/localizationStore";
 import { sha256Hex } from "./utils/sha256";
 import { computed, onMounted, onUnmounted, ref, watch, shallowRef } from "vue";
 import { storeToRefs } from "pinia";
@@ -32,6 +33,7 @@ const assetsOpen = ref(false);
 const controller = new AbortController();
 
 const settingsStore = useSettingsStore();
+const localizationStore = useLocalizationStore();
 const { entranceAnimation } = storeToRefs(settingsStore);
 
 let linkedAsmrId: string | undefined;
@@ -41,7 +43,7 @@ watch([category, selectedOptionId], () => {
         clearLinkedAsmrContext();
 });
 
-const catalog = computed(() => buildSpineCatalog(manifest.value, previews.value));
+const catalog = computed(() => buildSpineCatalog(manifest.value, previews.value, localizationStore.text));
 const items = computed(() => catalog.value[category.value]);
 const selectedItem = computed(() => items.value.find((item) => item.id === selectedItemId.value));
 const selectedOption = computed(() => selectedItem.value?.options.find((option) => option.id === selectedOptionId.value));
@@ -182,6 +184,7 @@ onMounted(async () => {
         if (!controller.signal.aborted)
         {
             manifest.value = data;
+            await localizationStore.load(catalogSha256.value, controller.signal);
             void loadPreviews();
         }
     }
@@ -292,6 +295,8 @@ onUnmounted(() => {
         <AssetArtworkModal v-model:artwork="artwork" />
 
         <SettingsModal
+            v-model:game-language="settingsStore.gameLanguage"
+            :localization-error="localizationStore.error"
             v-model:open="settingsOpen"
             :entrance-animation="entranceAnimation"
             @update:entrance-animation="settingsStore.setEntranceAnimation"

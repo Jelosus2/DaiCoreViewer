@@ -12,6 +12,7 @@ import { createSpineTransitionSession } from "@/spine/createSpineTransitionSessi
 import { acquireEntranceEffects, entranceTextureUrls } from "@/spine/playSpineEntrance.ts";
 import { useMinigameSession } from "@/minigames/useMinigameSession";
 import { useSettingsStore } from "@/stores/settingsStore.ts";
+import { useLocalizationStore } from "@/stores/localizationStore";
 import { useCanvasPan } from "@/composables/useCanvasPan";
 import { Application, Assets, Cache, Container, Texture } from "pixi.js";
 import { onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
@@ -51,6 +52,7 @@ const fullscreenSupported = document.fullscreenEnabled;
 const fullscreenMessage = ref("");
 
 const settingsStore = useSettingsStore();
+const localizationStore = useLocalizationStore();
 
 const cacheKeys = new Set<string>();
 const loadedAssets = new Set<string>();
@@ -139,6 +141,7 @@ const audio = createAssetAudioSession({
     baseUrl: import.meta.env.BASE_URL,
     volume: () => settingsStore.audioVolume,
     captions: () => settingsStore.audioCaptions,
+    translateCaption: localizationStore.caption,
     onProgress: (completed, total) => {
         loadingMessage.value = total > 0
             ? `Loading audio files... ${completed}/${total}`
@@ -159,7 +162,7 @@ watch([
     session?.setMarkersVisible(settingsStore.interactionMarkers && !panMode.value && !minigameOpen.value && !loading.value);
 });
 
-watch(() => [settingsStore.audioVolume, settingsStore.audioCaptions], () => {
+watch(() => [settingsStore.audioVolume, settingsStore.audioCaptions, settingsStore.gameLanguage, localizationStore.data], () => {
     audio.refreshSettings();
 }, { flush: "sync" });
 

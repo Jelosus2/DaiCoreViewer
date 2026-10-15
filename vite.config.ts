@@ -13,7 +13,7 @@ export default defineConfig({
     },
     server: {
         watch: {
-            ignored: ["**/public/**", "**/.spine-updates/**"]
+            ignored: ["**/public/**", "**/.spine-updates/**", "**/tools/**"]
         }
     }
 });

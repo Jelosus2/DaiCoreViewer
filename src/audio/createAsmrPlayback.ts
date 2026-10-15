@@ -5,7 +5,8 @@ interface AsmrPlaybackOptions {
     context: AudioContext;
     gain: GainNode;
     duration: number;
-    words: Array<{ time: number; word: string }>;
+    words: Array<{ index: number; time: number; word: string }>;
+    translateCaption: (index: number, original: string) => string;
     captions: () => boolean;
     onCaption: (text: string) => void;
     onBlocked: (blocked: boolean) => void;
@@ -61,7 +62,7 @@ export function createAsmrPlayback(options: AsmrPlaybackOptions) {
                 if (word.time > Math.floor(time))
                     break;
 
-                text = word.word;
+                text = options.translateCaption(word.index, word.word);
             }
         }
 

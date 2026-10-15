@@ -42,7 +42,7 @@ export interface AudioManifest {
     cues: Record<string, Record<string, AudioCue>>;
     sounds: Record<string, AudioSound>;
     asmrCaptions: Record<string, {
-        arr: Array<{ time: number; word: string }>;
+        arr: Array<{ index: number; time: number; word: string }>;
     }>;
 }
 

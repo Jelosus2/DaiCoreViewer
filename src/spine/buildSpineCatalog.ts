@@ -1,7 +1,10 @@
 import type { SpineCatalog, ViewerItem, ViewerOption, AssetPreviews } from "@/types/viewer";
 import type { SpineManifest, SpineModel } from "@/types/spine";
+import type { TranslateGameText } from "@/types/localization";
 
-export function buildSpineCatalog(manifest: SpineManifest | null, previews?: AssetPreviews): SpineCatalog {
+const asmrPlacement: [number, number, number] = [0, 0, 1];
+
+export function buildSpineCatalog(manifest: SpineManifest | null, previews?: AssetPreviews, text: TranslateGameText = (_key, original) => original): SpineCatalog {
     const catalog: SpineCatalog = {
         characters: [],
         asmr: [],
@@ -13,22 +16,29 @@ export function buildSpineCatalog(manifest: SpineManifest | null, previews?: Ass
     if (!manifest)
         return catalog;
 
-    const modelIndex = new Map<number, { characterName: string; model: SpineModel; }>();
+    const modelIndex = new Map<number, { characterName: string; roleId: string; originalName: string; model: SpineModel; }>();
+
+    const originalName = (names: { alias: string | null; local: string | null }, fallback: string) => {
+        return [names.alias, names.local].find((value) => value?.trim() && value !== "None") ?? fallback;
+    };
+    const skinSource = (model: SpineModel) => model.skinName?.local?.trim() && model.skinName.local !== "None" ? model.skinName.local : model.render.l2dName;
+    const skinName = (model: SpineModel) => text(`skin:${model.modelId}:name`, skinSource(model));
 
     for (const [roleId, character] of Object.entries(manifest.characters))
     {
-        const name = character.names.english ?? character.names.alias ?? character.names.local ?? roleId;
+        const original = originalName(character.names, roleId);
+        const name = text(`character:${roleId}:name`, original);
         const models = Object.values(character.skins).sort((a, b) => a.modelId - b.modelId);
         const options = models.map((model) => ({
             id: String(model.modelId),
-            label: `${model.skinName?.english ?? model.skinName?.local ?? model.render.l2dName} · ${model.modelId}`,
+            label: `${skinName(model)} · ${model.modelId}`,
             placement: model.l2dPos,
             interaction: model.interaction,
             render: model.render
         }));
 
         for (const model of models)
-            modelIndex.set(model.modelId, { characterName: name, model });
+            modelIndex.set(model.modelId, { characterName: name, roleId, originalName: original, model });
 
         const firstReady = options.find((option) => option.render.status === "ready");
         if (!firstReady)
@@ -37,13 +47,16 @@ export function buildSpineCatalog(manifest: SpineManifest | null, previews?: Ass
         for (const [index, model] of models.entries())
         {
             const option = options[index];
-            const skinTitle = model.skinName?.english ?? model.skinName?.local ?? model.render.l2dName;
+            const skinTitle = skinName(model);
             const title = option.id === firstReady.id ? name : `${name} - ${skinTitle}`;
             const status = option.render.status === "ready" ? "" : " · Unavailable";
             const detail = `${skinTitle} · ${model.modelId}${status}`;
 
             catalog.characters.push(makeItem(option.id, title, detail, [option], [
                 roleId,
+                character.names.english,
+                text(`character:${roleId}:name`, original, "en"),
+                text(`skin:${model.modelId}:name`, skinSource(model), "en"),
                 character.names.local,
                 character.names.alias,
                 model.skinName?.local
@@ -54,28 +67,34 @@ export function buildSpineCatalog(manifest: SpineManifest | null, previews?: Ass
     for (const item of manifest.special?.asmr ?? [])
     {
         const related = modelIndex.get(item.modelId ?? -1);
-        const skinTitle = related?.model.skinName?.english ?? related?.model.skinName?.local ?? item.l2dName;
+        const skinTitle = related ? skinName(related.model) : item.l2dName;
+        const original = item.name ?? item.l2dName;
+        const title = text(`asmr:${item.id}:name`, original);
         const name = related
-            ? `${related.characterName} · ${skinTitle}`
-            : `ASMR ${item.id}`;
+            ? `${related.characterName} · ${title}`
+            : title;
 
-        addIfReady(catalog.asmr, makeItem(String(item.id), name, `${item.name ?? item.l2dName} · ASMR ${item.id}`, [{
+        addIfReady(catalog.asmr, makeItem(String(item.id), name, `${skinTitle} · ASMR ${item.id}`, [{
             id: String(item.id),
             label: item.l2dName,
-            placement: [0, 0, 1],
+            placement: asmrPlacement,
             render: item.render
-        }]));
+        }], [original, text(`asmr:${item.id}:name`, original, "en"),
+            related?.originalName, related ? text(`character:${related.roleId}:name`, related.originalName, "en") : "",
+            related ? skinSource(related.model) : "", related ? text(`skin:${related.model.modelId}:name`, skinSource(related.model), "en") : ""]));
     }
 
     for (const item of Object.values(manifest.archivePictures))
     {
-        addIfReady(catalog.archives, makeItem(String(item.id), item.name ?? item.render.l2dName, `${item.render.l2dName} · Archive ${item.id}`, [{
+        const original = item.name ?? item.render.l2dName;
+
+        addIfReady(catalog.archives, makeItem(String(item.id), text(`archive:${item.id}:name`, original), `${item.render.l2dName} · Archive ${item.id}`, [{
             id: String(item.id),
             label: item.render.l2dName,
             placement: item.l2dPos,
             interaction: item.interaction,
             render: item.render
-        }]));
+        }], [original, text(`archive:${item.id}:name`, original, "en")]));
     }
 
     for (const model of Object.values(manifest.ungroupedModels))
@@ -85,14 +104,14 @@ export function buildSpineCatalog(manifest: SpineManifest | null, previews?: Ass
             makeItem(
                 String(model.modelId),
                 model.render.l2dName,
-                `${model.skinName?.english ?? model.skinName?.local ?? "Model"} · ${model.modelId}`,
+                `${skinName(model)} · ${model.modelId}`,
                 [{
                     id: String(model.modelId),
                     label: model.render.l2dName,
                     placement: model.l2dPos,
                     interaction: model.interaction,
                     render: model.render
-                }]
+                }], [skinSource(model), text(`skin:${model.modelId}:name`, skinSource(model), "en")]
             )
         );
     }
