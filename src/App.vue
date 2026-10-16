@@ -235,7 +235,7 @@ onUnmounted(() => {
                 <div class="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between lg:flex-col lg:items-stretch lg:gap-0">
                     <div class="min-w-0">
                         <h1 class="truncate text-xl font-bold lg:text-2xl">
-                            {{ selectedItem?.name ?? "Select an asset" }}
+                            {{ selectedItem?.name ?? "DaiCoreViewer — Daiblos Core Viewer" }}
                         </h1>
                         <p v-if="selectedItem" class="mt-1 hidden text-sm text-subtle lg:block">
                             {{ selectedItem.detail }}
