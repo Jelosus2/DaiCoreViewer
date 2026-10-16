@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ImageIcon from "./icons/ImageIcon.vue";
+
 import { computed, ref, watch } from "vue";
 
 const props = defineProps<{ src?: string }>();
@@ -23,18 +25,11 @@ watch(() => props.src, () => {
             class="h-full w-full object-contain"
             @error="failed = true"
         >
-        <svg
+        <ImageIcon
             v-else
-            viewBox="0 0 24 24"
             class="size-7 text-subtle"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.3"
             aria-hidden="true"
-        >
-            <rect x="3" y="4" width="18" height="16" rx="3" />
-            <circle cx="8" cy="9" r="1.5" />
-            <path d="m4 17 5-5 4 4 3-3 5 5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+            focusable="false"
+        />
     </span>
 </template>

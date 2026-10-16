@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import PatreonIcon from "./icons/PatreonIcon.vue";
 import kofiIcon from "../assets/brand/kofi.png";
+import CloseIcon from "./icons/CloseIcon.vue";
+import HeartIcon from "./icons/HeartIcon.vue";
 
 import { version } from "../../package.json";
 import { onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from "vue";
@@ -142,16 +144,12 @@ onBeforeUnmount(() => {
             @click="onBackdropClick"
         >
             <button type="button" autofocus class="support-close" aria-label="Close support message" @click="close">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
-                    <path d="m6 6 12 12M18 6 6 18" />
-                </svg>
+                <CloseIcon width="20" height="20" aria-hidden="true" focusable="false" />
             </button>
 
             <div class="support-content">
                 <div class="support-emblem" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="29" height="29" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" />
-                    </svg>
+                    <HeartIcon width="29" height="29" aria-hidden="true" focusable="false" />
                 </div>
 
                 <p class="support-eyebrow">DAICOREVIEWER</p>

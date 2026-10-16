@@ -2,6 +2,7 @@
 import GearIcon from "./icons/GearIcon.vue";
 import PatreonIcon from "./icons/PatreonIcon.vue";
 import kofiIcon from "../assets/brand/kofi.png";
+import FolderIcon from "./icons/FolderIcon.vue";
 
 defineProps<{ assetsOpen: boolean; }>();
 
@@ -69,9 +70,7 @@ function refreshSite() {
                     class="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg px-2 text-sm text-muted hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:outline-focus lg:hidden"
                     @click="emit('assets')"
                 >
-                    <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-                        <path d="M3 5h7l2 3h9v12H3z" stroke-linejoin="round" />
-                    </svg>
+                    <FolderIcon class="size-5" aria-hidden="true" focusable="false" />
                     <span class="hidden sm:inline">Assets</span>
                 </button>
                 <button

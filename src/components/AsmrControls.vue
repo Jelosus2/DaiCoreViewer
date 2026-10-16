@@ -2,6 +2,7 @@
 import type { AsmrState } from "@/types/audio";
 
 import FullscreenIcon from "./icons/FullscreenIcon.vue";
+import PlaybackIcon from "./icons/PlaybackIcon.vue";
 
 defineProps<{
     state: AsmrState;
@@ -43,11 +44,12 @@ function seek(event: Event) {
                 class="grid size-11 shrink-0 lg:size-9 place-items-center rounded-full hover:bg-white/10 disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-white"
                 @click="emit('toggle')"
             >
-                <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                    <path v-if="state.ended" d="M4 10a8 8 0 1 1 1 8M4 4v6h6" />
-                    <path v-else-if="state.paused || state.blocked" d="m9 5 10 7-10 7z" fill="currentColor" stroke="none" />
-                    <path v-else d="M8 5v14M16 5v14" stroke-width="3" />
-                </svg>
+                <PlaybackIcon
+                    :state="state.ended ? 'replay' : state.paused || state.blocked ? 'play' : 'pause'"
+                    class="size-5"
+                    aria-hidden="true"
+                    focusable="false"
+                />
             </button>
 
             <span class="flex-1 text-xs tabular-nums text-white/75">
