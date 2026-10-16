@@ -5,6 +5,7 @@ import { viewerCategories } from "./types/viewer.ts";
 
 import AssetArtworkModal from "./components/AssetArtworkModal.vue";
 import SettingsModal from "./components/SettingsModal.vue";
+import SupportModal from "./components/SupportModal.vue";
 import AssetSidebar from "./components/AssetSidebar.vue";
 import AssetPicker from "./components/AssetPicker.vue";
 import SpineCanvas from "./components/SpineCanvas.vue";
@@ -29,6 +30,7 @@ const selectedOptionId = ref<string | null>(null);
 const loading = ref(true);
 const errorMessage = ref("");
 const settingsOpen = ref(false);
+const supportOpen = ref(false);
 const assetsOpen = ref(false);
 const controller = new AbortController();
 
@@ -254,7 +256,7 @@ onUnmounted(() => {
                     :audio-asset-key="audioAssetKey"
                     :catalog-sha256="catalogSha256"
                     :audio-context="linkedAsmrContext"
-                    :foreground="!settingsOpen && !assetsOpen && !artwork"
+                    :foreground="!settingsOpen && !assetsOpen && !artwork && !supportOpen"
                     @asmr="openAsmr"
                 />
                 <div
@@ -300,6 +302,11 @@ onUnmounted(() => {
             v-model:open="settingsOpen"
             :entrance-animation="entranceAnimation"
             @update:entrance-animation="settingsStore.setEntranceAnimation"
+        />
+
+        <SupportModal
+            v-model:open="supportOpen"
+            :ready="!loading && !errorMessage && !settingsOpen && !assetsOpen && !artwork"
         />
     </div>
 </template>
