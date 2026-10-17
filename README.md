@@ -4,7 +4,7 @@ An unofficial, browser-based viewer for **Daiblos Core** character animations, s
 
 Explore the game's artwork and interactions through a responsive interface with audio playback, captions and English translations*.
 
-[Report a bug](https://github.com/Jelosus2/DaiCoreViewer/issues) · [Ko-fi](https://ko-fi.com/jelosus1) · [Patreon](https://www.patreon.com/cw/jelosus1)
+[Open the viewer](https://daicoreviewer.jelosus1.dev/) · [Report a bug](https://github.com/Jelosus2/DaiCoreViewer/issues) · [Ko-fi](https://ko-fi.com/jelosus1) · [Patreon](https://www.patreon.com/cw/jelosus1)
 
 ## Features
 
