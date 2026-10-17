@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an improvement to the viewer.
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check existing issues before submitting a suggestion.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would this improve?
+      description: Describe the problem or use case behind your request.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested solution
+      description: Explain how you would like the feature to work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Mention any other approaches or existing workarounds.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add examples, screenshots, or mockups if useful.
+      

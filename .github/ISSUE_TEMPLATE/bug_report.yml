@@ -1,0 +1,75 @@
+name: Bug report
+description: Report something that isn't working correctly.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check existing issues before submitting a report.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Select the character or asset...
+        2. Click or tap...
+        3. The problem appears...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: input
+    id: asset
+    attributes:
+      label: Affected asset
+      description: Character, skin, ASMR or Archive name and ID, if applicable.
+      placeholder: "Character — Skin name — ID"
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Browser and device
+      description: Include your browser version, operating system, and device.
+      placeholder: "Firefox 144, Windows 11, desktop PC"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: Game-text language
+      description: Particularly useful for audio, caption, and translation issues.
+      options:
+        - English
+        - Chinese
+        - Both
+
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots or recordings
+      description: You can paste or drag images and videos into this field.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console errors
+      description: If available, paste relevant browser console errors.
+      render: text
+      

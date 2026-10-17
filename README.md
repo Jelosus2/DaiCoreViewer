@@ -1,5 +1,15 @@
 # DaiCoreViewer
 
+<p align="center">
+  <a href="https://daicoreviewer.jelosus1.dev/">
+    <img
+      src=".github/images/viewer.png"
+      alt="DaiCoreViewer showing the asset sidebar and Captain's animated artwork"
+      width="1000"
+    />
+  </a>
+</p>
+
 An unofficial, browser-based viewer for **Daiblos Core** character animations, skins, archives, and ASMR.
 
 Explore the game's artwork and interactions through a responsive interface with audio playback, captions and English translations*.
