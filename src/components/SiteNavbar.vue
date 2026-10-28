@@ -3,12 +3,14 @@ import GearIcon from "./icons/GearIcon.vue";
 import PatreonIcon from "./icons/PatreonIcon.vue";
 import kofiIcon from "../assets/brand/kofi.png";
 import FolderIcon from "./icons/FolderIcon.vue";
+import HistoryIcon from "./icons/HistoryIcon.vue";
 
 defineProps<{ assetsOpen: boolean; }>();
 
 const emit = defineEmits<{
     assets: [];
     settings: [];
+    changelog: [];
 }>();
 
 const siteIconUrl = `${import.meta.env.BASE_URL}game-icon.png`;
@@ -72,6 +74,16 @@ function refreshSite() {
                 >
                     <FolderIcon class="size-5" aria-hidden="true" focusable="false" />
                     <span class="hidden sm:inline">Assets</span>
+                </button>
+                <button
+                    type="button"
+                    aria-label="Changelog"
+                    aria-haspopup="dialog"
+                    title="Changelog"
+                    class="grid size-11 place-items-center rounded-lg text-muted hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:outline-focus"
+                    @click="emit('changelog')"
+                >
+                    <HistoryIcon class="size-5" aria-hidden="true" focusable="false" />
                 </button>
                 <button
                     type="button"

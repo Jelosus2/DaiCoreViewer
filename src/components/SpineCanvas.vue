@@ -6,6 +6,7 @@ import AudioControls from "./AudioControls.vue";
 import AsmrControls from "./AsmrControls.vue";
 import FullscreenIcon from "./icons/FullscreenIcon.vue";
 import InteractionMarkersIcon from "./icons/InteractionMarkersIcon.vue";
+import LayerControls from "./LayerControls.vue";
 
 import { createAssetAudioSession } from "@/audio/createAssetAudioSession";
 import { createSpineTransitionSession } from "@/spine/createSpineTransitionSession";
@@ -14,6 +15,7 @@ import { useMinigameSession } from "@/minigames/useMinigameSession";
 import { useSettingsStore } from "@/stores/settingsStore.ts";
 import { useLocalizationStore } from "@/stores/localizationStore";
 import { useCanvasPan } from "@/composables/useCanvasPan";
+import { useSpineLayers } from "@/composables/useSpineLayers";
 import { Application, Assets, Cache, Container, Texture } from "pixi.js";
 import { onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import "pixi.js/prepare";
@@ -133,6 +135,9 @@ const {
         activeCamera?.position.set(activeCamera.position.x + deltaX, activeCamera.position.y + deltaY);
     }
 });
+
+const layers = useSpineLayers();
+const layerGroups = layers.groups;
 
 const audio = createAssetAudioSession({
     assetKey: props.audioAssetKey,
@@ -317,6 +322,7 @@ async function setup() {
             onHotspotPointer: () => {
                 hotspotPointer = true;
             },
+            onSceneCreated: layers.mount,
             getGamePortraitScale: () => props.placement?.[2] ?? 1,
             shouldPlayEntrance: () => !isAsmr && settingsStore.claimEntranceAnimation(props.assetKey),
             entranceEffects,
@@ -549,6 +555,8 @@ function destroyView() {
     observer?.disconnect();
     observer = undefined;
 
+    layers.destroy();
+
     session?.destroy();
     session = undefined;
 
@@ -648,8 +656,14 @@ function revealAsmrControls() {
         const root = stage.value;
         const focused = document.activeElement;
 
-        if (root?.querySelector("[data-audio-controls]:hover") || root?.contains(focused) && focused?.matches(":focus-visible"))
+        if (
+            root?.querySelector("[data-layer-controls] dialog[open]") ||
+            root?.querySelector("[data-audio-controls]:hover") ||
+            root?.contains(focused) && focused?.matches(":focus-visible")
+        )
+        {
             return;
+        }
 
         asmrControlsVisible.value = false;
     }, 2500);
@@ -741,14 +755,22 @@ onUnmounted(() => {
         </div>
 
         <div
-            v-if="!isAsmr && !loading && !errorMessage"
+            v-if="!loading && !errorMessage"
             data-canvas-controls
+            :class="{ 'asmr-chrome': isAsmr }"
             class="absolute right-3 top-3 z-30 flex gap-2"
             @pointerdown.stop
             @wheel.stop
         >
+            <LayerControls
+                v-if="layerGroups.length && !minigameOpen"
+                :groups="layerGroups"
+                @slot="layers.setSlot"
+                @attachment="layers.setAttachment"
+                @reset="layers.reset"
+            />
             <button
-                v-if="interaction && !minigameOpen"
+                v-if="!isAsmr && interaction && !minigameOpen"
                 type="button"
                 aria-label="Interaction hints"
                 :aria-pressed="settingsStore.interactionMarkers"
@@ -762,7 +784,7 @@ onUnmounted(() => {
                 <InteractionMarkersIcon class="size-5" aria-hidden="true" focusable="false" />
             </button>
             <button
-                v-if="fullscreenSupported"
+                v-if="!isAsmr && fullscreenSupported"
                 type="button"
                 :aria-label="fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
                 :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'"

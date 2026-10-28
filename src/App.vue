@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SpineManifest } from "./types/spine";
 import type { ViewerCategory, AssetPreviews, ViewerArtwork } from "./types/viewer.ts";
+import type { ChangelogTarget } from "./types/changelog";
 import { viewerCategories } from "./types/viewer.ts";
 
 import AssetArtworkModal from "./components/AssetArtworkModal.vue";
@@ -11,6 +12,7 @@ import AssetPicker from "./components/AssetPicker.vue";
 import SpineCanvas from "./components/SpineCanvas.vue";
 import SiteNavbar from "./components/SiteNavbar.vue";
 import SiteFooter from "./components/SiteFooter.vue";
+import ChangelogModal from "./components/ChangelogModal.vue";
 
 import { buildSpineCatalog } from "./spine/buildSpineCatalog.ts";
 import { useSettingsStore } from "./stores/settingsStore.ts";
@@ -32,6 +34,9 @@ const errorMessage = ref("");
 const settingsOpen = ref(false);
 const supportOpen = ref(false);
 const assetsOpen = ref(false);
+const changelogOpen = ref(false);
+const changelogPending = ref(true);
+const changelogShown = ref(false);
 const controller = new AbortController();
 
 const settingsStore = useSettingsStore();
@@ -141,6 +146,25 @@ function chooseCategory(next: ViewerCategory) {
     chooseItem(null);
 }
 
+function openChangelogAsset(target: ChangelogTarget) {
+    const item = catalog.value[target.category].find((entry) => entry.id === target.id);
+    if (!item?.options.some((option) => option.render.status === "ready" && option.render.root))
+        return;
+
+    changelogOpen.value = false;
+    assetsOpen.value = false;
+
+    if (target.category === "asmr")
+    {
+        openAsmr(Number(target.id));
+        return;
+    }
+
+    clearLinkedAsmrContext();
+    chooseCategory(target.category);
+    chooseItem(target.id);
+}
+
 function clearLinkedAsmrContext() {
     const context = linkedAsmrContext.value;
     linkedAsmrContext.value = undefined;
@@ -221,6 +245,7 @@ onUnmounted(() => {
             :assets-open="assetsOpen"
             @assets="assetsOpen = true"
             @settings="settingsOpen = true"
+            @changelog="changelogOpen = true"
         />
 
         <main class="flex min-h-0 flex-1">
@@ -260,7 +285,7 @@ onUnmounted(() => {
                     :audio-asset-key="audioAssetKey"
                     :catalog-sha256="catalogSha256"
                     :audio-context="linkedAsmrContext"
-                    :foreground="!settingsOpen && !assetsOpen && !artwork && !supportOpen"
+                    :foreground="!settingsOpen && !assetsOpen && !artwork && !supportOpen && !changelogOpen"
                     @asmr="openAsmr"
                 />
                 <div
@@ -308,9 +333,18 @@ onUnmounted(() => {
             @update:entrance-animation="settingsStore.setEntranceAnimation"
         />
 
+        <ChangelogModal
+            v-model:open="changelogOpen"
+            :catalog="catalog"
+            :ready="!loading && !errorMessage && !settingsOpen && !assetsOpen && !artwork && !supportOpen"
+            @pending="changelogPending = $event"
+            @shown="changelogShown = true"
+            @select="openChangelogAsset"
+        />
+
         <SupportModal
             v-model:open="supportOpen"
-            :ready="!loading && !errorMessage && !settingsOpen && !assetsOpen && !artwork"
+            :ready="!loading && !errorMessage && !settingsOpen && !assetsOpen && !artwork && !changelogOpen && !changelogPending && !changelogShown"
         />
     </div>
 </template>

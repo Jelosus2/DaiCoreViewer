@@ -1,5 +1,6 @@
 import type { SpineActionConfig, SpineActionItem, SpineActionTarget, SpineRender, SpineRoot } from "@/types/spine";
 import type { EntranceEffects } from "./playSpineEntrance";
+import type { BuiltSpineScene } from "./buildSpineScene";
 
 import { parseSpineTap, type SpineRoleTransition } from "./parseSpineTap";
 import { buildSpineScene } from "./buildSpineScene";
@@ -27,6 +28,7 @@ interface TransitionSessionOptions {
     onActionStart?: (item: SpineActionItem, recordPosition?: number) => void;
     onAsmr?: (id: number) => void;
     onHotspotPointer?: () => void;
+    onSceneCreated?: (root: SpineRoot, scene: BuiltSpineScene) => void;
     getGamePortraitScale: () => number;
     shouldPlayEntrance?: () => boolean;
     entranceEffects: EntranceEffects;
@@ -131,6 +133,8 @@ export function createSpineTransitionSession(options: TransitionSessionOptions) 
         clearLayer(options.artLayer);
 
         const scene = buildSpineScene(root, options.artLayer, options.cacheKeys);
+        options.onSceneCreated?.(root, scene);
+
         const spines = scene.spines;
         currentSpines = spines;
 
