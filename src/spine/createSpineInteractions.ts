@@ -662,8 +662,7 @@ export function createSpineInteractions(
                     spine.state.addEmptyAnimation(action.trackIndex, 0.5, 0);
             }
 
-            if (entry)
-                options.onActionStart?.(action.item, chosen?.position ?? 1);
+            options.onActionStart?.(action.item, chosen?.position ?? 1);
 
             applyActivation(action, false);
             scheduleIdle(action);

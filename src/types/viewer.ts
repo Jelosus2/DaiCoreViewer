@@ -15,6 +15,7 @@ export interface ViewerOption {
     label: string;
     placement?: SpinePlacement;
     interaction?: SpineActionConfig;
+    audioAssetKey?: string | null;
     render: SpineRender;
 }
 

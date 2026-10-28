@@ -50,7 +50,11 @@ const items = computed(() => catalog.value[category.value]);
 const selectedItem = computed(() => items.value.find((item) => item.id === selectedItemId.value));
 const selectedOption = computed(() => selectedItem.value?.options.find((option) => option.id === selectedOptionId.value));
 const audioAssetKey = computed(() => {
-    const id = selectedOption.value?.id;
+    const option = selectedOption.value;
+    if (option?.audioAssetKey !== undefined)
+        return option.audioAssetKey ?? undefined;
+
+    const id = option?.id;
     if (!id)
         return undefined;
 
@@ -66,7 +70,7 @@ const audioAssetKey = computed(() => {
 
 const transitionTargets = computed(() => {
     const option = selectedOption.value;
-    if (!option || !manifest.value?.special)
+    if (!option?.interaction || !manifest.value?.special)
         return [];
 
     const table = category.value === "archives"
