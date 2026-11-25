@@ -4,8 +4,7 @@ import type { TranslateGameText } from "@/types/localization";
 
 const asmrPlacement: [number, number, number] = [0, 0, 1];
 const retainedOtherNames = new Set([
-    "10340_break_Uluru_spine",
-    "20140_skin_newCapriccio04a_spine"
+    "10340_break_Uluru_spine"
 ]);
 
 export function buildSpineCatalog(manifest: SpineManifest | null, previews?: AssetPreviews, text: TranslateGameText = (_key, original) => original): SpineCatalog {
@@ -21,7 +20,6 @@ export function buildSpineCatalog(manifest: SpineManifest | null, previews?: Ass
         return catalog;
 
     const modelIndex = new Map<number, { characterName: string; roleId: string; originalName: string; model: SpineModel; }>();
-    let originalCapriccio: ViewerItem | undefined;
 
     const originalName = (names: { alias: string | null; local: string | null }, fallback: string) => {
         return [names.alias, names.local].find((value) => value?.trim() && value !== "None") ?? fallback;
@@ -57,16 +55,7 @@ export function buildSpineCatalog(manifest: SpineManifest | null, previews?: Ass
             const status = option.render.status === "ready" ? "" : " · Unavailable";
             const detail = `${skinTitle} · ${model.modelId}${status}`;
 
-            const originalRender = model.modelId === 2014004 && option.render.l2dName === "20140_skin_newCapriccio04a_spine"
-                ? manifest.special?.actionTransitions
-                    .find((entry) => entry.table === "cfgCfgSpineAction.lua" && entry.id === model.modelId)
-                    ?.targets.find((target) => target.l2dName === "20140_skin_Capriccio04a_spine" && target.render.status === "ready")?.render
-                : undefined;
-
-            const item = makeItem(option.id, originalRender ? `${title} (Original)` : title, detail, [{
-                ...option,
-                render: originalRender ?? option.render
-            }], [
+            catalog.characters.push(makeItem(option.id, title, detail, [option], [
                 roleId,
                 character.names.english,
                 text(`character:${roleId}:name`, original, "en"),
@@ -74,15 +63,7 @@ export function buildSpineCatalog(manifest: SpineManifest | null, previews?: Ass
                 character.names.local,
                 character.names.alias,
                 model.skinName?.local
-            ]);
-
-            catalog.characters.push(item);
-
-            if (originalRender)
-            {
-                originalCapriccio = item;
-                catalog.characters.push(makeItem(`${option.id}:censored`, `${title} (Censored)`, detail, [option], [item.searchText]));
-            }
+            ]));
         }
     }
 
@@ -174,12 +155,6 @@ export function buildSpineCatalog(manifest: SpineManifest | null, previews?: Ass
             item.thumbnail = previews?.images[key];
             item.artwork = previews?.artwork?.[key];
         }
-    }
-
-    if (originalCapriccio)
-    {
-        originalCapriccio.thumbnail = "assets/preserved/capriccio-2014004/thumbnail.webp";
-        originalCapriccio.artwork = "assets/preserved/capriccio-2014004/artwork.webp";
     }
 
     return catalog;
